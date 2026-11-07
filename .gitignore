@@ -1,5 +1,0 @@
-/build/
-/cmake-build-*/
-/docs/*
-!/docs/.gitkeep
-/开发指导.md

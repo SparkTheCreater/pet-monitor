@@ -35,6 +35,7 @@ if(PM_PLATFORM STREQUAL "rk3588")
         src/plt/rk3588/plt_jpeg.cpp
         src/plt/rk3588/plt_npu.cpp
     )
+    target_compile_definitions(pm_plt PRIVATE RK_3588)
     target_include_directories(pm_plt
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/include

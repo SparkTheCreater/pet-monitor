@@ -3,6 +3,9 @@
  * @brief   用 RGA 做裁剪、缩放、转色和描边。返回时硬件已经完成。
  */
 #include "plt/plt_rga.h"
+#ifdef RK_3588
+#include "plt/plt_mem.h"
+#endif
 
 #include "im2d.h"
 
@@ -62,6 +65,75 @@ int RgaOk(IM_STATUS status)
 {
     return (int)status > 0;
 }
+
+#ifdef RK_3588
+int ImportFd(const PmImage *image, int format, rga_buffer_handle_t *handle, rga_buffer_t *buf)
+{
+    *handle = importbuffer_fd(image->fd, image->size);
+    if (*handle == 0)
+    {
+        return PM_ERR;
+    }
+    *buf = wrapbuffer_handle(*handle,
+                             image->width,
+                             image->height,
+                             format,
+                             image->hor_stride,
+                             image->ver_stride);
+    return PM_OK;
+}
+
+/*
+ * 这块板子的 librga 1.9.3 不能把 NV12 直接改色彩范围，improcess 会返回不支持。
+ * 先按源范围转到 RGB，再按目标范围转回 NV12。调用返回前临时缓冲已释放。
+ */
+int ExpandRange(const PmImage *src, PmImage *dst)
+{
+    PmImage rgb;
+    memset(&rgb, 0, sizeof(rgb));
+    rgb.fd = -1;
+    if (plt_mem_alloc(src->width, src->height, PM_PIX_RGB888, &rgb) != PM_OK)
+    {
+        return PM_ERR;
+    }
+
+    const int to_rgb = src->range == PM_RANGE_FULL ? IM_YUV_TO_RGB_BT601_FULL : IM_YUV_TO_RGB_BT601_LIMIT;
+    const int to_yuv = dst->range == PM_RANGE_FULL ? IM_RGB_TO_YUV_BT601_FULL : IM_RGB_TO_YUV_BT601_LIMIT;
+    rga_buffer_handle_t src_handle = 0;
+    rga_buffer_handle_t rgb_handle = 0;
+    rga_buffer_handle_t dst_handle = 0;
+    rga_buffer_t src_buf;
+    rga_buffer_t rgb_buf;
+    rga_buffer_t dst_buf;
+    int ret = PM_ERR;
+    if (ImportFd(src, RK_FORMAT_YCbCr_420_SP, &src_handle, &src_buf) == PM_OK &&
+        ImportFd(&rgb, RK_FORMAT_RGB_888, &rgb_handle, &rgb_buf) == PM_OK &&
+        ImportFd(dst, RK_FORMAT_YCbCr_420_SP, &dst_handle, &dst_buf) == PM_OK &&
+        RgaOk(imcvtcolor(src_buf, rgb_buf, RK_FORMAT_YCbCr_420_SP, RK_FORMAT_RGB_888, to_rgb, 1)) &&
+        RgaOk(imcvtcolor(rgb_buf, dst_buf, RK_FORMAT_RGB_888, RK_FORMAT_YCbCr_420_SP, to_yuv, 1)))
+    {
+        ret = PM_OK;
+    }
+    if (src_handle != 0)
+    {
+        releasebuffer_handle(src_handle);
+    }
+    if (rgb_handle != 0)
+    {
+        releasebuffer_handle(rgb_handle);
+    }
+    if (dst_handle != 0)
+    {
+        releasebuffer_handle(dst_handle);
+    }
+    plt_mem_free(&rgb);
+    if (ret != PM_OK)
+    {
+        fprintf(stderr, "[plt.rga] range conversion failed\n");
+    }
+    return ret;
+}
+#endif
 
 Span Whole(const PmImage *image)
 {
@@ -337,10 +409,16 @@ extern "C" PmStatus plt_rga_blit(const PmImage *src, const PmRect *src_rect, PmI
     }
     else if (IsYuv(src->format) && IsYuv(dst->format) && src->range != dst->range)
     {
+#ifdef RK_3588
+        return ExpandRange(src, dst);
+#else
+#ifdef RK_3568
         imsetColorSpace(&src_image.buf,
                         src->range == PM_RANGE_FULL ? IM_YUV_BT601_FULL_RANGE : IM_YUV_BT601_LIMIT_RANGE);
         imsetColorSpace(&dst_image.buf,
                         dst->range == PM_RANGE_FULL ? IM_YUV_BT601_FULL_RANGE : IM_YUV_BT601_LIMIT_RANGE);
+#endif
+#endif
     }
 
     rga_buffer_t empty;

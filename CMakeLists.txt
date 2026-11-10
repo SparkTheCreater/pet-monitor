@@ -52,9 +52,21 @@ endif()
 
 target_link_libraries(pm_plt PUBLIC pm_base)
 
+add_library(pm_media STATIC
+    src/media/decoder.c
+    src/media/gfx.c
+    src/media/encoder.c
+)
+target_include_directories(pm_media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include)
+target_link_libraries(pm_media PUBLIC pm_plt)
+
 if(PM_PLATFORM STREQUAL "stub")
     enable_testing()
     add_executable(plt_stub_test tests/plt_stub_test.c)
     target_link_libraries(plt_stub_test PRIVATE pm_plt)
     add_test(NAME plt_stub_test COMMAND plt_stub_test)
+
+    add_executable(media_stub_test tests/media_stub_test.c)
+    target_link_libraries(media_stub_test PRIVATE pm_media)
+    add_test(NAME media_stub_test COMMAND media_stub_test)
 endif()

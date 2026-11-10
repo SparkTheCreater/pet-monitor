@@ -4,6 +4,7 @@
  */
 #include "media_dec.h"
 #include "media_enc.h"
+#include "media_jpeg.h"
 #include "media_pic.h"
 
 #include <stdio.h>
@@ -32,6 +33,12 @@ int main(void)
     Expect(dec == NULL, "decoder cleared");
     media_dec_close(NULL);
     Expect(media_dec_send(NULL, NULL, 0, 0, 0) == BASE_ERR, "decoder send");
+
+    uint8_t *jpeg = (uint8_t *)1;
+    size_t jpeg_len = 1;
+    Expect(media_jpeg_encode(NULL, 80, &jpeg, &jpeg_len) == BASE_ERR, "jpeg encode");
+    Expect(jpeg == NULL && jpeg_len == 0, "jpeg encode cleared");
+    media_jpeg_free(NULL);
 
     Expect(media_pic_scale(NULL, NULL, NULL, NULL) == BASE_ERR, "scale");
     Expect(media_pic_line(NULL, 0, 0, 10, 2, 1, 0) == BASE_ERR, "line");

@@ -19,6 +19,7 @@
 - 解码：`media_dec_open`、`media_dec_send`、`media_dec_receive`、`media_dec_release`。类型是 `MediaDec`。
 - 缩放、拷贝、转色：`media_pic_scale`。尺寸相同是拷贝，格式不同时顺带转色。
 - 画线、画框：`media_pic_line`、`media_pic_box`。里面调用平台层对应的接口。
-- 视频编码：类型是 `MediaEnc`，打开用 `media_enc_open`。参数不合法返回失败。平台层还没有视频编码器时，参数合法也返回不支持。JPEG 编码仍在平台层。
+- JPEG：`media_jpeg_encode`。返回时码流已经出来，用 `media_jpeg_free` 释放。
+- 视频编码：类型是 `MediaEnc`，打开用 `media_enc_open`。参数不合法返回失败。平台层还没有视频编码器时，参数合法也返回不支持。
 
 公共类型在 `base`，例如 `BaseImage`、`BaseStatus`、`BASE_OK`。平台层库名是 `plt`。

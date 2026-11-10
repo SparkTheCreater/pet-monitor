@@ -53,7 +53,7 @@ MediaEncPacket;
 /*
  * 同步。参数不合法返回 BASE_ERR。
  * 平台层还没有视频编码器，参数合法时返回 BASE_UNSUPPORTED，*out 为空。
- * JPEG 仍用 plt_jpeg_encode。
+ * JPEG 用 media_jpeg_encode。
  */
 BaseStatus media_enc_open(const MediaEncParam *param, MediaEnc **out);
 

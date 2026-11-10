@@ -8,7 +8,9 @@
 
 #include "plt_internal.h"
 
+#include "mpp_buffer.h"
 #include "mpp_frame.h"
+#include "mpp_meta.h"
 #include "mpp_packet.h"
 #include "rk_mpi.h"
 #include "rk_venc_cfg.h"
@@ -27,12 +29,16 @@ struct Encoder
     MppApi *mpi;
     MppEncCfg cfg;
     MppFrame frame;
+    MppBufferGroup group;
+    MppBuffer packet_buf;
 
     Encoder()
         : ctx(nullptr)
         , mpi(nullptr)
         , cfg(nullptr)
         , frame(nullptr)
+        , group(nullptr)
+        , packet_buf(nullptr)
     {
     }
 
@@ -42,16 +48,36 @@ struct Encoder
         {
             mpp_frame_deinit(&frame);
         }
+        if (ctx != nullptr)
+        {
+            if (mpi != nullptr)
+            {
+                mpi->reset(ctx);
+            }
+            mpp_destroy(ctx);
+        }
         if (cfg != nullptr)
         {
             mpp_enc_cfg_deinit(cfg);
         }
-        if (ctx != nullptr)
+        if (packet_buf != nullptr)
         {
-            mpp_destroy(ctx);
+            mpp_buffer_put(packet_buf);
+        }
+        if (group != nullptr)
+        {
+            mpp_buffer_group_put(group);
         }
     }
 };
+
+/* 码流缓冲按 mpi_enc_test 的 frame_size。JPEG 一般比 NV12 小。 */
+size_t PacketBytes(const BaseImage *image)
+{
+    const size_t hor = (size_t)((image->hor_stride + 63) & ~63);
+    const size_t ver = (size_t)((image->ver_stride + 63) & ~63);
+    return hor * ver * 3 / 2;
+}
 
 BaseStatus EncodeFull(const BaseImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
 {
@@ -60,7 +86,7 @@ BaseStatus EncodeFull(const BaseImage *image, int quality, uint8_t **jpeg, size_
     {
         return BASE_ERR;
     }
-    RK_S64 timeout = MPP_POLL_BLOCK;
+    MppPollType timeout = MPP_POLL_BLOCK;
     enc.mpi->control(enc.ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
     if (mpp_init(enc.ctx, MPP_CTX_ENC, MPP_VIDEO_CodingMJPEG) != MPP_OK)
     {
@@ -82,7 +108,8 @@ BaseStatus EncodeFull(const BaseImage *image, int quality, uint8_t **jpeg, size_
     mpp_enc_cfg_set_s32(enc.cfg, "rc:fps_in_denorm", 1);
     mpp_enc_cfg_set_s32(enc.cfg, "rc:fps_out_num", 30);
     mpp_enc_cfg_set_s32(enc.cfg, "rc:fps_out_denorm", 1);
-    mpp_enc_cfg_set_s32(enc.cfg, "jpeg:q_factor", quality);
+    /* MPP 的 q_factor 只到 99。调用方给 100 时按最高质量送。 */
+    mpp_enc_cfg_set_s32(enc.cfg, "jpeg:q_factor", quality > 99 ? 99 : quality);
     mpp_enc_cfg_set_s32(enc.cfg, "jpeg:qf_max", 99);
     mpp_enc_cfg_set_s32(enc.cfg, "jpeg:qf_min", 1);
     mpp_enc_cfg_set_s32(enc.cfg, "codec:type", MPP_VIDEO_CodingMJPEG);
@@ -102,42 +129,92 @@ BaseStatus EncodeFull(const BaseImage *image, int quality, uint8_t **jpeg, size_
     mpp_frame_set_ver_stride(enc.frame, (RK_U32)image->ver_stride);
     mpp_frame_set_fmt(enc.frame, MPP_FMT_YUV420SP);
     mpp_frame_set_color_range(enc.frame, MPP_FRAME_RANGE_JPEG);
+    mpp_frame_set_eos(enc.frame, 1);
     mpp_frame_set_buffer(enc.frame, (MppBuffer)image->handle);
 
-    if (enc.mpi->encode_put_frame(enc.ctx, enc.frame) != MPP_OK)
-    {
-        fprintf(stderr, "[plt.jpeg] put frame failed\n");
-        return BASE_ERR;
-    }
+    const size_t bytes = PacketBytes(image);
     MppPacket packet = nullptr;
-    if (enc.mpi->encode_get_packet(enc.ctx, &packet) != MPP_OK || packet == nullptr)
+    if (bytes == 0 ||
+        mpp_buffer_group_get_internal(&enc.group, MPP_BUFFER_TYPE_DRM) != MPP_OK ||
+        mpp_buffer_get(enc.group, &enc.packet_buf, bytes) != MPP_OK ||
+        mpp_packet_init_with_buffer(&packet, enc.packet_buf) != MPP_OK)
     {
         if (packet != nullptr)
         {
             mpp_packet_deinit(&packet);
         }
-        fprintf(stderr, "[plt.jpeg] get packet failed\n");
+        fprintf(stderr, "[plt.jpeg] packet buffer failed\n");
         return BASE_ERR;
     }
+    mpp_packet_set_length(packet, 0);
+    mpp_meta_set_packet(mpp_frame_get_meta(enc.frame), KEY_OUTPUT_PACKET, packet);
 
-    const size_t len = mpp_packet_get_length(packet);
-    void *pos = mpp_packet_get_pos(packet);
-    if (pos == nullptr || len == 0)
+    if (enc.mpi->encode_put_frame(enc.ctx, enc.frame) != MPP_OK)
     {
         mpp_packet_deinit(&packet);
+        fprintf(stderr, "[plt.jpeg] put frame failed\n");
         return BASE_ERR;
     }
-    uint8_t *copy = (uint8_t *)malloc(len);
-    if (copy == nullptr)
+    mpp_frame_deinit(&enc.frame);
+
+    /*
+     * mpi_enc_test 在分区编码时一段一段取，直到 EOI。
+     * 只取一次会在大图上拿到半张 JPEG。
+     */
+    uint8_t *copy = nullptr;
+    size_t filled = 0;
+    int limit = image->ver_stride / 16 + 2;
+    if (limit < 2)
     {
-        mpp_packet_deinit(&packet);
-        return BASE_ERR;
+        limit = 2;
     }
-    memcpy(copy, pos, len);
-    mpp_packet_deinit(&packet);
-    *jpeg = copy;
-    *jpeg_len = len;
-    return BASE_OK;
+    for (int i = 0; i < limit; ++i)
+    {
+        if (enc.mpi->encode_get_packet(enc.ctx, &packet) != MPP_OK || packet == nullptr)
+        {
+            free(copy);
+            fprintf(stderr, "[plt.jpeg] get packet failed\n");
+            return BASE_ERR;
+        }
+        void *pos = mpp_packet_get_pos(packet);
+        const size_t len = mpp_packet_get_length(packet);
+        const int eoi = !mpp_packet_is_partition(packet) || mpp_packet_is_eoi(packet);
+        if (len > 0)
+        {
+            uint8_t *grown = nullptr;
+            if (pos == nullptr)
+            {
+                mpp_packet_deinit(&packet);
+                free(copy);
+                return BASE_ERR;
+            }
+            grown = (uint8_t *)realloc(copy, filled + len);
+            if (grown == nullptr)
+            {
+                mpp_packet_deinit(&packet);
+                free(copy);
+                return BASE_ERR;
+            }
+            copy = grown;
+            memcpy(copy + filled, pos, len);
+            filled += len;
+        }
+        mpp_packet_deinit(&packet);
+        if (eoi)
+        {
+            if (filled == 0)
+            {
+                free(copy);
+                return BASE_ERR;
+            }
+            *jpeg = copy;
+            *jpeg_len = filled;
+            return BASE_OK;
+        }
+    }
+    free(copy);
+    fprintf(stderr, "[plt.jpeg] packet not finished\n");
+    return BASE_ERR;
 }
 
 }

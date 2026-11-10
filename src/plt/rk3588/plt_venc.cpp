@@ -15,13 +15,19 @@
 #include "rk_venc_cmd.h"
 #include "rk_venc_rc.h"
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ioctl.h>
 
 #include <deque>
 #include <new>
 #include <utility>
 #include <vector>
+
+#if defined(RK_3588) && defined(RK_3568)
+#error RK_3588 and RK_3568 cannot both be defined
+#endif
 
 struct EncPacket
 {
@@ -42,12 +48,20 @@ struct PltVenc
     int hor_stride;
     int ver_stride;
     int format;
+    int codec;
     int rc_mode;
     bool mismatch_logged;
     std::deque<EncPacket> queue;
     EncPacket held;
     int held_valid;
     std::vector<MppEncROIRegion> roi;
+#ifdef RK_3588
+    MppBuffer roi_base;
+    MppBuffer roi_qp;
+    MppEncROICfg2 roi_hw;
+    int roi_mb_w;
+    int roi_mb_h;
+#endif
 
     PltVenc()
         : ctx(nullptr)
@@ -60,10 +74,20 @@ struct PltVenc
         , hor_stride(0)
         , ver_stride(0)
         , format(0)
+        , codec(BASE_CODEC_H264)
         , rc_mode(0)
         , mismatch_logged(false)
         , held_valid(0)
+#ifdef RK_3588
+        , roi_base(nullptr)
+        , roi_qp(nullptr)
+        , roi_mb_w(0)
+        , roi_mb_h(0)
+#endif
     {
+#ifdef RK_3588
+        memset(&roi_hw, 0, sizeof(roi_hw));
+#endif
     }
 };
 
@@ -74,6 +98,116 @@ int Align16(int value)
 {
     return (value + 15) & ~15;
 }
+
+#ifdef RK_3588
+
+/* vepu580 H.264：每个 16×16 一块，一行按 64 像素对齐。和 hal 检查的缓冲宽度一致。 */
+struct RoiMbBase
+{
+    uint64_t force_inter : 42;
+    uint64_t mode_mask : 9;
+    uint64_t reserved : 10;
+    uint64_t force_intra : 1;
+    uint64_t qp_adj_en : 1;
+    uint64_t amv_en : 1;
+};
+
+struct RoiMbQp
+{
+    uint16_t reserved : 4;
+    uint16_t qp_area_idx : 4;
+    int16_t qp_adj : 7;
+    uint16_t qp_adj_mode : 1;
+};
+
+struct DmaSync
+{
+    uint64_t flags;
+};
+
+#ifndef DMA_BUF_IOCTL_SYNC
+#define DMA_BUF_BASE 'b'
+#define DMA_BUF_IOCTL_SYNC _IOW(DMA_BUF_BASE, 0, struct DmaSync)
+#endif
+
+int RoiStride(int pixels)
+{
+    return ((pixels + 63) / 64) * 4;
+}
+
+void FlushDevice(MppBuffer buffer)
+{
+    struct DmaSync sync;
+    int fd = mpp_buffer_get_fd(buffer);
+
+    sync.flags = 2u | 4u;
+    if (fd >= 0)
+    {
+        ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
+    }
+}
+
+int OpenRoi(PltVenc *enc)
+{
+    size_t count;
+
+    static_assert(sizeof(RoiMbBase) == 8, "roi base");
+    static_assert(sizeof(RoiMbQp) == 2, "roi qp");
+
+    if (enc->codec != BASE_CODEC_H264)
+    {
+        return 0;
+    }
+    enc->roi_mb_w = RoiStride(enc->width);
+    enc->roi_mb_h = RoiStride(enc->height);
+    count = (size_t)enc->roi_mb_w * (size_t)enc->roi_mb_h;
+    if (mpp_buffer_get(enc->group, &enc->roi_base, count * sizeof(RoiMbBase)) != MPP_OK ||
+        mpp_buffer_get(enc->group, &enc->roi_qp, count * sizeof(RoiMbQp)) != MPP_OK)
+    {
+        return -1;
+    }
+    enc->roi_hw.base_cfg_buf = enc->roi_base;
+    enc->roi_hw.qp_cfg_buf = enc->roi_qp;
+    enc->roi_hw.roi_qp_en = 1;
+    return 0;
+}
+
+void WriteRoi(PltVenc *enc)
+{
+    RoiMbBase *base = (RoiMbBase *)mpp_buffer_get_ptr(enc->roi_base);
+    RoiMbQp *qp = (RoiMbQp *)mpp_buffer_get_ptr(enc->roi_qp);
+    size_t count = (size_t)enc->roi_mb_w * (size_t)enc->roi_mb_h;
+    size_t i;
+
+    memset(base, 0, count * sizeof(*base));
+    memset(qp, 0, count * sizeof(*qp));
+    for (i = 0; i < enc->roi.size(); ++i)
+    {
+        const MppEncROIRegion *region = &enc->roi[i];
+        int x0 = region->x / 16;
+        int y0 = region->y / 16;
+        int x1 = x0 + region->w / 16;
+        int y1 = y0 + region->h / 16;
+        int y;
+        int x;
+
+        for (y = y0; y < y1; ++y)
+        {
+            for (x = x0; x < x1; ++x)
+            {
+                int index = y * enc->roi_mb_w + x;
+                base[index].force_intra = region->intra;
+                base[index].qp_adj_en = region->quality != 0;
+                qp[index].qp_adj = (int16_t)region->quality;
+                qp[index].qp_adj_mode = region->abs_qp_en;
+            }
+        }
+    }
+    FlushDevice(enc->roi_base);
+    FlushDevice(enc->roi_qp);
+}
+
+#endif
 
 MppFrameFormat MppFormat(int format)
 {
@@ -166,6 +300,16 @@ extern "C" void plt_venc_close(PltVenc *enc)
     {
         mpp_buffer_put(enc->packet_buf);
     }
+#ifdef RK_3588
+    if (enc->roi_base != nullptr)
+    {
+        mpp_buffer_put(enc->roi_base);
+    }
+    if (enc->roi_qp != nullptr)
+    {
+        mpp_buffer_put(enc->roi_qp);
+    }
+#endif
     if (enc->group != nullptr)
     {
         mpp_buffer_group_put(enc->group);
@@ -222,6 +366,7 @@ extern "C" BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
     enc->hor_stride = Align16(param->width);
     enc->ver_stride = Align16(param->height);
     enc->format = param->format;
+    enc->codec = param->codec;
     enc->rc_mode = param->rc_mode;
 
     coding = param->codec == BASE_CODEC_H265 ? MPP_VIDEO_CodingHEVC : MPP_VIDEO_CodingAVC;
@@ -282,6 +427,14 @@ extern "C" BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
         plt_venc_close(enc);
         return BASE_ERR;
     }
+#ifdef RK_3588
+    if (OpenRoi(enc) != 0)
+    {
+        fprintf(stderr, "[plt.venc] roi buffer failed\n");
+        plt_venc_close(enc);
+        return BASE_ERR;
+    }
+#endif
 
     /* 先让编码器写出参数集。关键帧模式会把它附在每个 IDR 上。 */
     packet = nullptr;
@@ -299,7 +452,9 @@ extern "C" BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
 extern "C" BaseStatus plt_venc_send(PltVenc *enc, const BaseImage *image, int64_t pts_us)
 {
     MppFrame frame = nullptr;
+#if defined(RK_3568)
     MppEncROICfg roi_cfg;
+#endif
     MppPacket packet = nullptr;
     MPP_RET put_ret;
     BaseStatus status = BASE_ERR;
@@ -346,7 +501,18 @@ extern "C" BaseStatus plt_venc_send(PltVenc *enc, const BaseImage *image, int64_
      */
     mpp_frame_set_buffer(frame, (MppBuffer)image->handle);
 
-    /* 区域数组要活到这一帧编码结束。HAL 在送帧过程中按这个指针读。 */
+    /*
+     * 区域要活到这一帧取完码流。
+     * RK3588 按 mpi_enc_test：展开成宏块表，挂 KEY_ROI_DATA2。
+     * RK3568 直接挂矩形数组 KEY_ROI_DATA。
+     */
+#ifdef RK_3588
+    if (enc->roi_base != nullptr && !enc->roi.empty())
+    {
+        WriteRoi(enc);
+        mpp_meta_set_ptr(mpp_frame_get_meta(frame), KEY_ROI_DATA2, &enc->roi_hw);
+    }
+#elif defined(RK_3568)
     memset(&roi_cfg, 0, sizeof(roi_cfg));
     if (!enc->roi.empty())
     {
@@ -354,6 +520,7 @@ extern "C" BaseStatus plt_venc_send(PltVenc *enc, const BaseImage *image, int64_
         roi_cfg.regions = enc->roi.data();
         mpp_meta_set_ptr(mpp_frame_get_meta(frame), KEY_ROI_DATA, &roi_cfg);
     }
+#endif
 
     if (mpp_packet_init_with_buffer(&packet, enc->packet_buf) != MPP_OK)
     {

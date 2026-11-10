@@ -2,10 +2,10 @@
  * @file    plt_npu.h
  * @brief   加载模型并跑一次推理。不做检测后处理。
  */
-#ifndef PM_PLT_NPU_H
-#define PM_PLT_NPU_H
+#ifndef PLT_NPU_H
+#define PLT_NPU_H
 
-#include "pm_image.h"
+#include "base_image.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -30,33 +30,33 @@ typedef struct PltNpuTensor
 PltNpuTensor;
 
 /* 同步。从文件加载模型。只接受单输入模型。失败时 *out 为空。 */
-PmStatus plt_npu_open(const char *model_path, PltNpu **out);
+BaseStatus plt_npu_open(const char *model_path, PltNpu **out);
 
 /* 同步。卸载模型。空指针直接返回。 */
 void plt_npu_close(PltNpu *npu);
 
 /*
  * 同步。把以后的推理绑到指定核。mask 的数值与 RKNN 的 rknn_core_mask 相同，0 表示自动。
- * 没有这个能力的运行时返回 PM_ERR。
+ * 没有这个能力的运行时返回 BASE_ERR。
  */
-PmStatus plt_npu_set_core(PltNpu *npu, int core_mask);
+BaseStatus plt_npu_set_core(PltNpu *npu, int core_mask);
 
 /* 同步。读模型输入的形状。 */
-PmStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info);
+BaseStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info);
 
 /* 同步。写出输出个数。 */
-PmStatus plt_npu_output_count(PltNpu *npu, int *count);
+BaseStatus plt_npu_output_count(PltNpu *npu, int *count);
 
 /* 同步。读第 index 个输出的形状。 */
-PmStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info);
+BaseStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info);
 
 /*
  * 同步。input 必须是 RGB888，宽高与模型输入一致，用 fd 直接交给 NPU，中间不经 CPU 拷贝。
  * 返回之前不得改写 input。outputs[i] 由调用方提供，bytes[i] 不得小于该输出的 bytes。
  * 原始输出拷进调用方的缓冲，不在这里做阈值和画框。
  */
-PmStatus plt_npu_run(PltNpu *npu,
-                     const PmImage *input,
+BaseStatus plt_npu_run(PltNpu *npu,
+                     const BaseImage *input,
                      void *const *outputs,
                      const size_t *bytes);
 

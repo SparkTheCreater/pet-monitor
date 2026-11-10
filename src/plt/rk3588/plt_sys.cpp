@@ -16,20 +16,20 @@ int g_refs = 0;
 
 }
 
-extern "C" PmStatus plt_init(void)
+extern "C" BaseStatus plt_init(void)
 {
     std::lock_guard<std::mutex> lock(g_mutex);
     if (g_refs > 0)
     {
         g_refs++;
-        return PM_OK;
+        return BASE_OK;
     }
-    if (plt_rk_mem_open() != PM_OK)
+    if (plt_rk_mem_open() != BASE_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     g_refs = 1;
-    return PM_OK;
+    return BASE_OK;
 }
 
 extern "C" void plt_deinit(void)

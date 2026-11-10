@@ -53,22 +53,22 @@ struct Encoder
     }
 };
 
-PmStatus EncodeFull(const PmImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
+BaseStatus EncodeFull(const BaseImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
 {
     Encoder enc;
     if (mpp_create(&enc.ctx, &enc.mpi) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     RK_S64 timeout = MPP_POLL_BLOCK;
     enc.mpi->control(enc.ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
     if (mpp_init(enc.ctx, MPP_CTX_ENC, MPP_VIDEO_CodingMJPEG) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (mpp_enc_cfg_init(&enc.cfg) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     mpp_enc_cfg_set_s32(enc.cfg, "prep:width", image->width);
@@ -89,12 +89,12 @@ PmStatus EncodeFull(const PmImage *image, int quality, uint8_t **jpeg, size_t *j
     if (enc.mpi->control(enc.ctx, MPP_ENC_SET_CFG, enc.cfg) != MPP_OK)
     {
         fprintf(stderr, "[plt.jpeg] set config failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     if (mpp_frame_init(&enc.frame) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     mpp_frame_set_width(enc.frame, (RK_U32)image->width);
     mpp_frame_set_height(enc.frame, (RK_U32)image->height);
@@ -107,7 +107,7 @@ PmStatus EncodeFull(const PmImage *image, int quality, uint8_t **jpeg, size_t *j
     if (enc.mpi->encode_put_frame(enc.ctx, enc.frame) != MPP_OK)
     {
         fprintf(stderr, "[plt.jpeg] put frame failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
     MppPacket packet = nullptr;
     if (enc.mpi->encode_get_packet(enc.ctx, &packet) != MPP_OK || packet == nullptr)
@@ -117,7 +117,7 @@ PmStatus EncodeFull(const PmImage *image, int quality, uint8_t **jpeg, size_t *j
             mpp_packet_deinit(&packet);
         }
         fprintf(stderr, "[plt.jpeg] get packet failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     const size_t len = mpp_packet_get_length(packet);
@@ -125,24 +125,24 @@ PmStatus EncodeFull(const PmImage *image, int quality, uint8_t **jpeg, size_t *j
     if (pos == nullptr || len == 0)
     {
         mpp_packet_deinit(&packet);
-        return PM_ERR;
+        return BASE_ERR;
     }
     uint8_t *copy = (uint8_t *)malloc(len);
     if (copy == nullptr)
     {
         mpp_packet_deinit(&packet);
-        return PM_ERR;
+        return BASE_ERR;
     }
     memcpy(copy, pos, len);
     mpp_packet_deinit(&packet);
     *jpeg = copy;
     *jpeg_len = len;
-    return PM_OK;
+    return BASE_OK;
 }
 
 }
 
-extern "C" PmStatus plt_jpeg_encode(const PmImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
+extern "C" BaseStatus plt_jpeg_encode(const BaseImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
 {
     if (jpeg != nullptr)
     {
@@ -152,36 +152,36 @@ extern "C" PmStatus plt_jpeg_encode(const PmImage *image, int quality, uint8_t *
     {
         *jpeg_len = 0;
     }
-    if (!pm_image_valid(image) || jpeg == nullptr || jpeg_len == nullptr)
+    if (!base_image_valid(image) || jpeg == nullptr || jpeg_len == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    if (image->format != PM_PIX_NV12 || quality < 1 || quality > 100 || !plt_rk_ready())
+    if (image->format != BASE_PIX_NV12 || quality < 1 || quality > 100 || !plt_rk_ready())
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
-    if (image->range == PM_RANGE_FULL)
+    if (image->range == BASE_RANGE_FULL)
     {
         return EncodeFull(image, quality, jpeg, jpeg_len);
     }
 
-    PmImage full;
+    BaseImage full;
     memset(&full, 0, sizeof(full));
     full.fd = -1;
-    if (plt_mem_alloc(image->width, image->height, PM_PIX_NV12, &full) != PM_OK)
+    if (plt_mem_alloc(image->width, image->height, BASE_PIX_NV12, &full) != BASE_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     /* 目标标成全范围，转换按这个系数把有限范围拉开。 */
-    full.range = PM_RANGE_FULL;
-    if (plt_rga_blit(image, nullptr, &full, nullptr) != PM_OK)
+    full.range = BASE_RANGE_FULL;
+    if (plt_rga_blit(image, nullptr, &full, nullptr) != BASE_OK)
     {
         plt_mem_free(&full);
         fprintf(stderr, "[plt.jpeg] expand range failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
-    const PmStatus status = EncodeFull(&full, quality, jpeg, jpeg_len);
+    const BaseStatus status = EncodeFull(&full, quality, jpeg, jpeg_len);
     plt_mem_free(&full);
     return status;
 }

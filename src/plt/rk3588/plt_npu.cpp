@@ -32,7 +32,7 @@ struct PltNpu
 };
 
 #if !defined(RKNN_NPU_CORE_0)
-#define PM_RKNN_CORE_DECLARED 1
+#define PLT_RKNN_CORE_DECLARED 1
 enum
 {
     RKNN_NPU_CORE_AUTO = 0,
@@ -88,7 +88,7 @@ void FillTensor(const rknn_tensor_attr *attr, PltNpuTensor *info)
 
 int BindCore(rknn_context ctx, int mask)
 {
-#if defined(PM_RKNN_CORE_DECLARED)
+#if defined(PLT_RKNN_CORE_DECLARED)
     return rknn_set_core_mask(ctx, mask);
 #else
     return rknn_set_core_mask(ctx, (rknn_core_mask)mask);
@@ -97,7 +97,7 @@ int BindCore(rknn_context ctx, int mask)
 
 }
 
-extern "C" PmStatus plt_npu_open(const char *model_path, PltNpu **out)
+extern "C" BaseStatus plt_npu_open(const char *model_path, PltNpu **out)
 {
     if (out != nullptr)
     {
@@ -105,18 +105,18 @@ extern "C" PmStatus plt_npu_open(const char *model_path, PltNpu **out)
     }
     if (model_path == nullptr || model_path[0] == '\0' || out == nullptr || !plt_rk_ready())
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     PltNpu *npu = new (std::nothrow) PltNpu();
     if (npu == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (rknn_init(&npu->ctx, (void *)model_path, 0, 0, nullptr) != RKNN_SUCC || npu->ctx == 0)
     {
         delete npu;
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     rknn_input_output_num num;
@@ -126,7 +126,7 @@ extern "C" PmStatus plt_npu_open(const char *model_path, PltNpu **out)
         fprintf(stderr, "[plt.npu] model must have one input\n");
         rknn_destroy(npu->ctx);
         delete npu;
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     npu->input.index = 0;
@@ -134,7 +134,7 @@ extern "C" PmStatus plt_npu_open(const char *model_path, PltNpu **out)
     {
         rknn_destroy(npu->ctx);
         delete npu;
-        return PM_ERR;
+        return BASE_ERR;
     }
     TensorHw(&npu->input, &npu->width, &npu->height);
 
@@ -146,7 +146,7 @@ extern "C" PmStatus plt_npu_open(const char *model_path, PltNpu **out)
     {
         rknn_destroy(npu->ctx);
         delete npu;
-        return PM_ERR;
+        return BASE_ERR;
     }
     for (uint32_t i = 0; i < num.n_output; ++i)
     {
@@ -155,12 +155,12 @@ extern "C" PmStatus plt_npu_open(const char *model_path, PltNpu **out)
         {
             rknn_destroy(npu->ctx);
             delete npu;
-            return PM_ERR;
+            return BASE_ERR;
         }
     }
 
     *out = npu;
-    return PM_OK;
+    return BASE_OK;
 }
 
 extern "C" void plt_npu_close(PltNpu *npu)
@@ -176,75 +176,75 @@ extern "C" void plt_npu_close(PltNpu *npu)
     delete npu;
 }
 
-extern "C" PmStatus plt_npu_set_core(PltNpu *npu, int core_mask)
+extern "C" BaseStatus plt_npu_set_core(PltNpu *npu, int core_mask)
 {
     if (npu == nullptr || npu->ctx == 0 || core_mask < 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (BindCore(npu->ctx, core_mask) != RKNN_SUCC)
     {
         fprintf(stderr, "[plt.npu] set core failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
-    return PM_OK;
+    return BASE_OK;
 }
 
-extern "C" PmStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info)
+extern "C" BaseStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info)
 {
     if (npu == nullptr || info == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     FillTensor(&npu->input, info);
-    return PM_OK;
+    return BASE_OK;
 }
 
-extern "C" PmStatus plt_npu_output_count(PltNpu *npu, int *count)
+extern "C" BaseStatus plt_npu_output_count(PltNpu *npu, int *count)
 {
     if (npu == nullptr || count == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     *count = (int)npu->outputs.size();
-    return PM_OK;
+    return BASE_OK;
 }
 
-extern "C" PmStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info)
+extern "C" BaseStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info)
 {
     if (npu == nullptr || info == nullptr || index < 0 || index >= (int)npu->outputs.size())
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     FillTensor(&npu->outputs[(size_t)index], info);
-    return PM_OK;
+    return BASE_OK;
 }
 
-extern "C" PmStatus plt_npu_run(PltNpu *npu, const PmImage *input, void *const *outputs, const size_t *bytes)
+extern "C" BaseStatus plt_npu_run(PltNpu *npu, const BaseImage *input, void *const *outputs, const size_t *bytes)
 {
-    if (npu == nullptr || npu->ctx == 0 || !pm_image_valid(input))
+    if (npu == nullptr || npu->ctx == 0 || !base_image_valid(input))
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    if (input->format != PM_PIX_RGB888 || input->fd < 0 || input->size <= 0)
+    if (input->format != BASE_PIX_RGB888 || input->fd < 0 || input->size <= 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (npu->width > 0 && (input->width != npu->width || input->height != npu->height))
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     const int count = (int)npu->outputs.size();
     if (count > 0 && (outputs == nullptr || bytes == nullptr))
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     for (int i = 0; i < count; ++i)
     {
         if (outputs[i] == nullptr || bytes[i] < npu->outputs[(size_t)i].size)
         {
-            return PM_ERR;
+            return BASE_ERR;
         }
     }
 
@@ -256,22 +256,22 @@ extern "C" PmStatus plt_npu_run(PltNpu *npu, const PmImage *input, void *const *
     if (mem == nullptr)
     {
         fprintf(stderr, "[plt.npu] import fd failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (rknn_set_io_mem(npu->ctx, mem, &attr) != RKNN_SUCC)
     {
         rknn_destory_mem(npu->ctx, mem);
         fprintf(stderr, "[plt.npu] set input failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (rknn_run(npu->ctx, nullptr) != RKNN_SUCC)
     {
         rknn_destory_mem(npu->ctx, mem);
         fprintf(stderr, "[plt.npu] run failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
 
-    PmStatus status = PM_OK;
+    BaseStatus status = BASE_OK;
     if (count > 0)
     {
         try
@@ -289,13 +289,13 @@ extern "C" PmStatus plt_npu_run(PltNpu *npu, const PmImage *input, void *const *
             if (rknn_outputs_get(npu->ctx, (uint32_t)count, out.data(), nullptr) != RKNN_SUCC)
             {
                 fprintf(stderr, "[plt.npu] get output failed\n");
-                status = PM_ERR;
+                status = BASE_ERR;
             }
             rknn_outputs_release(npu->ctx, (uint32_t)count, out.data());
         }
         catch (const std::bad_alloc &)
         {
-            status = PM_ERR;
+            status = BASE_ERR;
         }
     }
     rknn_destory_mem(npu->ctx, mem);

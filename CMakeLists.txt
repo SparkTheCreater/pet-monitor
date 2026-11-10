@@ -11,8 +11,8 @@ if(NOT PM_PLATFORM STREQUAL "stub" AND NOT PM_PLATFORM STREQUAL "rk3588")
     message(FATAL_ERROR "PM_PLATFORM must be stub or rk3588")
 endif()
 
-add_library(pm_base INTERFACE)
-target_include_directories(pm_base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include)
+add_library(base INTERFACE)
+target_include_directories(base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include)
 
 if(PM_PLATFORM STREQUAL "rk3588")
     enable_language(CXX)
@@ -27,7 +27,7 @@ if(PM_PLATFORM STREQUAL "rk3588")
         message(FATAL_ERROR "rk3588 needs PM_MPP_INCLUDE, PM_RGA_INCLUDE and PM_RKNN_INCLUDE")
     endif()
 
-    add_library(pm_plt STATIC
+    add_library(plt STATIC
         src/plt/rk3588/plt_sys.cpp
         src/plt/rk3588/plt_mem.cpp
         src/plt/rk3588/plt_vdec.cpp
@@ -35,8 +35,8 @@ if(PM_PLATFORM STREQUAL "rk3588")
         src/plt/rk3588/plt_jpeg.cpp
         src/plt/rk3588/plt_npu.cpp
     )
-    target_compile_definitions(pm_plt PRIVATE RK_3588)
-    target_include_directories(pm_plt
+    target_compile_definitions(plt PRIVATE RK_3588)
+    target_include_directories(plt
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/include
         PRIVATE
@@ -46,27 +46,27 @@ if(PM_PLATFORM STREQUAL "rk3588")
             ${PM_RKNN_INCLUDE}
     )
 else()
-    add_library(pm_plt STATIC src/plt/stub/plt_stub.c)
-    target_include_directories(pm_plt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/include)
+    add_library(plt STATIC src/plt/stub/plt_stub.c)
+    target_include_directories(plt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/include)
 endif()
 
-target_link_libraries(pm_plt PUBLIC pm_base)
+target_link_libraries(plt PUBLIC base)
 
-add_library(pm_media STATIC
-    src/media/decoder.c
-    src/media/gfx.c
-    src/media/encoder.c
+add_library(media STATIC
+    src/media/media_dec.c
+    src/media/media_enc.c
+    src/media/media_pic.c
 )
-target_include_directories(pm_media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include)
-target_link_libraries(pm_media PUBLIC pm_plt)
+target_include_directories(media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include)
+target_link_libraries(media PUBLIC plt)
 
 if(PM_PLATFORM STREQUAL "stub")
     enable_testing()
     add_executable(plt_stub_test tests/plt_stub_test.c)
-    target_link_libraries(plt_stub_test PRIVATE pm_plt)
+    target_link_libraries(plt_stub_test PRIVATE plt)
     add_test(NAME plt_stub_test COMMAND plt_stub_test)
 
     add_executable(media_stub_test tests/media_stub_test.c)
-    target_link_libraries(media_stub_test PRIVATE pm_media)
+    target_link_libraries(media_stub_test PRIVATE media)
     add_test(NAME media_stub_test COMMAND media_stub_test)
 endif()

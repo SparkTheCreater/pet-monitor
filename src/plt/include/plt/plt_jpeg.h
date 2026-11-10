@@ -2,10 +2,10 @@
  * @file    plt_jpeg.h
  * @brief   把 NV12 编成 JPEG。返回时编码已经做完。
  */
-#ifndef PM_PLT_JPEG_H
-#define PM_PLT_JPEG_H
+#ifndef PLT_JPEG_H
+#define PLT_JPEG_H
 
-#include "pm_image.h"
+#include "base_image.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -18,7 +18,7 @@ extern "C"
  * 成功时 *jpeg 由 plt 分配，调用方用 plt_jpeg_free 交还。失败时 *jpeg 为空，不用释放。
  * 返回前不修改调用方的 image。
  */
-PmStatus plt_jpeg_encode(const PmImage *image,
+BaseStatus plt_jpeg_encode(const BaseImage *image,
                          int quality,
                          uint8_t **jpeg,
                          size_t *jpeg_len);

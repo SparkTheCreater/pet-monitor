@@ -2,9 +2,9 @@
  * @file    media_stub_test.c
  * @brief   没有芯片时，解码打不开，画线和编码也不假装成功。
  */
-#include "media/pm_decoder.h"
-#include "media/pm_encoder.h"
-#include "media/pm_gfx.h"
+#include "media_dec.h"
+#include "media_enc.h"
+#include "media_pic.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -23,41 +23,41 @@ static void Expect(int cond, const char *name)
 
 int main(void)
 {
-    PmDecoder *decoder = (PmDecoder *)1;
-    PmEncoder *encoder = (PmEncoder *)1;
-    PmEncoderParam param;
-    PmStatus status;
+    MediaDec *dec = (MediaDec *)1;
+    MediaEnc *enc = (MediaEnc *)1;
+    MediaEncParam param;
+    BaseStatus status;
 
-    Expect(pm_decoder_open(PM_CODEC_H264, 4, NULL, 0, &decoder) == PM_ERR, "decoder open");
-    Expect(decoder == NULL, "decoder cleared");
-    pm_decoder_close(NULL);
-    Expect(pm_decoder_send(NULL, NULL, 0, 0, 0) == PM_ERR, "decoder send");
+    Expect(media_dec_open(BASE_CODEC_H264, 4, NULL, 0, &dec) == BASE_ERR, "decoder open");
+    Expect(dec == NULL, "decoder cleared");
+    media_dec_close(NULL);
+    Expect(media_dec_send(NULL, NULL, 0, 0, 0) == BASE_ERR, "decoder send");
 
-    Expect(pm_gfx_scale(NULL, NULL, NULL, NULL) == PM_ERR, "scale");
-    Expect(pm_gfx_line(NULL, 0, 0, 10, 2, 1, 0) == PM_ERR, "line");
-    Expect(pm_gfx_box(NULL, NULL, 0, 0, 2) == PM_ERR, "box");
+    Expect(media_pic_scale(NULL, NULL, NULL, NULL) == BASE_ERR, "scale");
+    Expect(media_pic_line(NULL, 0, 0, 10, 2, 1, 0) == BASE_ERR, "line");
+    Expect(media_pic_box(NULL, NULL, 0, 0, 2) == BASE_ERR, "box");
 
     memset(&param, 0, sizeof(param));
-    Expect(pm_encoder_open(NULL, &encoder) == PM_ERR, "encoder null");
-    Expect(encoder == NULL, "encoder cleared");
+    Expect(media_enc_open(NULL, &enc) == BASE_ERR, "encoder null");
+    Expect(enc == NULL, "encoder cleared");
 
-    param.codec = PM_CODEC_H264;
-    param.format = PM_PIX_NV12;
+    param.codec = BASE_CODEC_H264;
+    param.format = BASE_PIX_NV12;
     param.width = 640;
     param.height = 480;
     param.fps = 25;
     param.gop = 50;
-    param.rc_mode = PM_RC_CBR;
+    param.rc_mode = MEDIA_RC_CBR;
     param.bitrate = 2000000;
     param.qp_init = 26;
     param.qp_min = 10;
     param.qp_max = 51;
     param.profile = 100;
     param.level = 40;
-    status = pm_encoder_open(&param, &encoder);
-    Expect(status == PM_UNSUPPORTED, "encoder unsupported");
-    Expect(encoder == NULL, "encoder still empty");
-    pm_encoder_close(NULL);
-    Expect(pm_encoder_send(NULL, NULL, 0) == PM_ERR, "encoder send");
+    status = media_enc_open(&param, &enc);
+    Expect(status == BASE_UNSUPPORTED, "encoder unsupported");
+    Expect(enc == NULL, "encoder still empty");
+    media_enc_close(NULL);
+    Expect(media_enc_send(NULL, NULL, 0) == BASE_ERR, "encoder send");
     return g_failed ? 1 : 0;
 }

@@ -11,7 +11,7 @@
 
 #include <string.h>
 
-static void ClearImage(PmImage *image)
+static void ClearImage(BaseImage *image)
 {
     if (image == NULL)
     {
@@ -21,36 +21,36 @@ static void ClearImage(PmImage *image)
     image->fd = -1;
 }
 
-PmStatus plt_init(void)
+BaseStatus plt_init(void)
 {
-    return PM_ERR;
+    return BASE_ERR;
 }
 
 void plt_deinit(void)
 {
 }
 
-PmStatus plt_mem_alloc(int width, int height, int format, PmImage *out)
+BaseStatus plt_mem_alloc(int width, int height, int format, BaseImage *out)
 {
     (void)width;
     (void)height;
     (void)format;
     ClearImage(out);
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-void plt_mem_free(PmImage *image)
+void plt_mem_free(BaseImage *image)
 {
     ClearImage(image);
 }
 
-PmStatus plt_mem_flush(PmImage *image)
+BaseStatus plt_mem_flush(BaseImage *image)
 {
     (void)image;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
+BaseStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
 {
     (void)codec;
     (void)buf_count;
@@ -58,7 +58,7 @@ PmStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
     {
         *out = NULL;
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
 void plt_vdec_close(PltVdec *dec)
@@ -66,17 +66,17 @@ void plt_vdec_close(PltVdec *dec)
     (void)dec;
 }
 
-PmStatus plt_vdec_send(PltVdec *dec, const uint8_t *data, int len, int64_t pts_us, int eos)
+BaseStatus plt_vdec_send(PltVdec *dec, const uint8_t *data, int len, int64_t pts_us, int eos)
 {
     (void)dec;
     (void)data;
     (void)len;
     (void)pts_us;
     (void)eos;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_vdec_get(PltVdec *dec, PmDecodedFrame *frame)
+BaseStatus plt_vdec_get(PltVdec *dec, BaseDecodedFrame *frame)
 {
     (void)dec;
     if (frame != NULL)
@@ -84,36 +84,36 @@ PmStatus plt_vdec_get(PltVdec *dec, PmDecodedFrame *frame)
         memset(frame, 0, sizeof(*frame));
         frame->image.fd = -1;
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_vdec_release(PltVdec *dec, PmDecodedFrame *frame)
+BaseStatus plt_vdec_release(PltVdec *dec, BaseDecodedFrame *frame)
 {
     (void)dec;
     (void)frame;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_rga_blit(const PmImage *src, const PmRect *src_rect, PmImage *dst, const PmRect *dst_rect)
+BaseStatus plt_rga_blit(const BaseImage *src, const BaseRect *src_rect, BaseImage *dst, const BaseRect *dst_rect)
 {
     (void)src;
     (void)src_rect;
     (void)dst;
     (void)dst_rect;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_rga_boxes(PmImage *dst, const PmRect *boxes, int count, uint32_t rgb, int thickness)
+BaseStatus plt_rga_boxes(BaseImage *dst, const BaseRect *boxes, int count, uint32_t rgb, int thickness)
 {
     (void)dst;
     (void)boxes;
     (void)count;
     (void)rgb;
     (void)thickness;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_jpeg_encode(const PmImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
+BaseStatus plt_jpeg_encode(const BaseImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
 {
     (void)image;
     (void)quality;
@@ -125,7 +125,7 @@ PmStatus plt_jpeg_encode(const PmImage *image, int quality, uint8_t **jpeg, size
     {
         *jpeg_len = 0;
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
 void plt_jpeg_free(uint8_t *jpeg)
@@ -133,14 +133,14 @@ void plt_jpeg_free(uint8_t *jpeg)
     (void)jpeg;
 }
 
-PmStatus plt_npu_open(const char *model_path, PltNpu **out)
+BaseStatus plt_npu_open(const char *model_path, PltNpu **out)
 {
     (void)model_path;
     if (out != NULL)
     {
         *out = NULL;
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
 void plt_npu_close(PltNpu *npu)
@@ -148,34 +148,34 @@ void plt_npu_close(PltNpu *npu)
     (void)npu;
 }
 
-PmStatus plt_npu_set_core(PltNpu *npu, int core_mask)
+BaseStatus plt_npu_set_core(PltNpu *npu, int core_mask)
 {
     (void)npu;
     (void)core_mask;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info)
+BaseStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info)
 {
     (void)npu;
     if (info != NULL)
     {
         memset(info, 0, sizeof(*info));
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_npu_output_count(PltNpu *npu, int *count)
+BaseStatus plt_npu_output_count(PltNpu *npu, int *count)
 {
     (void)npu;
     if (count != NULL)
     {
         *count = 0;
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info)
+BaseStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info)
 {
     (void)npu;
     (void)index;
@@ -183,14 +183,14 @@ PmStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info)
     {
         memset(info, 0, sizeof(*info));
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus plt_npu_run(PltNpu *npu, const PmImage *input, void *const *outputs, const size_t *bytes)
+BaseStatus plt_npu_run(PltNpu *npu, const BaseImage *input, void *const *outputs, const size_t *bytes)
 {
     (void)npu;
     (void)input;
     (void)outputs;
     (void)bytes;
-    return PM_ERR;
+    return BASE_ERR;
 }

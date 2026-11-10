@@ -1,13 +1,13 @@
 /**
- * @file    decoder.c
+ * @file    media_dec.c
  * @brief   视频解码。参数集先转成 Annex B，色彩范围留在帧上。
  */
-#include "media/pm_decoder.h"
+#include "media_dec.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-struct PmDecoder
+struct MediaDec
 {
     PltVdec *dec;
     uint8_t *extra;
@@ -125,47 +125,47 @@ static int ToAnnexb(const uint8_t *extra, size_t size, uint8_t **out, int *out_s
     return 1;
 }
 
-PmStatus pm_decoder_open(int codec,
+BaseStatus media_dec_open(int codec,
                          int buf_count,
                          const uint8_t *extradata,
                          size_t extradata_size,
-                         PmDecoder **out)
+                         MediaDec **out)
 {
-    PmDecoder *decoder;
+    MediaDec *decoder;
     if (out != NULL)
     {
         *out = NULL;
     }
     if (out == NULL || buf_count <= 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    if (codec != PM_CODEC_H264 && codec != PM_CODEC_H265)
+    if (codec != BASE_CODEC_H264 && codec != BASE_CODEC_H265)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    decoder = (PmDecoder *)calloc(1, sizeof(*decoder));
+    decoder = (MediaDec *)calloc(1, sizeof(*decoder));
     if (decoder == NULL)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (!ToAnnexb(extradata, extradata_size, &decoder->extra, &decoder->extra_size))
     {
         free(decoder);
-        return PM_ERR;
+        return BASE_ERR;
     }
     decoder->extra_pending = decoder->extra_size > 0;
-    if (plt_vdec_open(codec, buf_count, &decoder->dec) != PM_OK)
+    if (plt_vdec_open(codec, buf_count, &decoder->dec) != BASE_OK)
     {
         free(decoder->extra);
         free(decoder);
-        return PM_ERR;
+        return BASE_ERR;
     }
     *out = decoder;
-    return PM_OK;
+    return BASE_OK;
 }
 
-void pm_decoder_close(PmDecoder *decoder)
+void media_dec_close(MediaDec *decoder)
 {
     if (decoder == NULL)
     {
@@ -179,21 +179,21 @@ void pm_decoder_close(PmDecoder *decoder)
     free(decoder);
 }
 
-PmStatus pm_decoder_send(PmDecoder *decoder, const uint8_t *data, int len, int64_t pts_us, int eos)
+BaseStatus media_dec_send(MediaDec *decoder, const uint8_t *data, int len, int64_t pts_us, int eos)
 {
-    PmStatus status;
+    BaseStatus status;
     if (decoder == NULL || decoder->dec == NULL)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (decoder->extra_pending)
     {
         status = plt_vdec_send(decoder->dec, decoder->extra, decoder->extra_size, pts_us, 0);
-        if (status == PM_AGAIN)
+        if (status == BASE_AGAIN)
         {
-            return PM_AGAIN;
+            return BASE_AGAIN;
         }
-        if (status != PM_OK)
+        if (status != BASE_OK)
         {
             return status;
         }
@@ -202,20 +202,20 @@ PmStatus pm_decoder_send(PmDecoder *decoder, const uint8_t *data, int len, int64
     return plt_vdec_send(decoder->dec, data, len, pts_us, eos);
 }
 
-PmStatus pm_decoder_receive(PmDecoder *decoder, PmDecodedFrame *frame)
+BaseStatus media_dec_receive(MediaDec *decoder, BaseDecodedFrame *frame)
 {
     if (decoder == NULL || decoder->dec == NULL)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     return plt_vdec_get(decoder->dec, frame);
 }
 
-PmStatus pm_decoder_release(PmDecoder *decoder, PmDecodedFrame *frame)
+BaseStatus media_dec_release(MediaDec *decoder, BaseDecodedFrame *frame)
 {
     if (decoder == NULL || decoder->dec == NULL)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     return plt_vdec_release(decoder->dec, frame);
 }

@@ -1,16 +1,16 @@
 /**
- * @file    encoder.c
+ * @file    media_enc.c
  * @brief   视频编码接口。平台层还没有视频编码器，打开时明确返回不支持。
  */
-#include "media/pm_encoder.h"
+#include "media_enc.h"
 
-static int ParamOk(const PmEncoderParam *param)
+static int ParamOk(const MediaEncParam *param)
 {
-    if (param->codec != PM_CODEC_H264 && param->codec != PM_CODEC_H265)
+    if (param->codec != BASE_CODEC_H264 && param->codec != BASE_CODEC_H265)
     {
         return 0;
     }
-    if (param->format != PM_PIX_NV12 && param->format != PM_PIX_RGB888)
+    if (param->format != BASE_PIX_NV12 && param->format != BASE_PIX_RGB888)
     {
         return 0;
     }
@@ -18,7 +18,7 @@ static int ParamOk(const PmEncoderParam *param)
     {
         return 0;
     }
-    if (param->rc_mode != PM_RC_CBR && param->rc_mode != PM_RC_VBR)
+    if (param->rc_mode != MEDIA_RC_CBR && param->rc_mode != MEDIA_RC_VBR)
     {
         return 0;
     }
@@ -26,14 +26,14 @@ static int ParamOk(const PmEncoderParam *param)
     {
         return 0;
     }
-    if (param->codec == PM_CODEC_H264 && (param->profile < 0 || param->level <= 0))
+    if (param->codec == BASE_CODEC_H264 && (param->profile < 0 || param->level <= 0))
     {
         return 0;
     }
     return 1;
 }
 
-PmStatus pm_encoder_open(const PmEncoderParam *param, PmEncoder **out)
+BaseStatus media_enc_open(const MediaEncParam *param, MediaEnc **out)
 {
     if (out != NULL)
     {
@@ -41,25 +41,25 @@ PmStatus pm_encoder_open(const PmEncoderParam *param, PmEncoder **out)
     }
     if (param == NULL || out == NULL || !ParamOk(param))
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    return PM_UNSUPPORTED;
+    return BASE_UNSUPPORTED;
 }
 
-void pm_encoder_close(PmEncoder *encoder)
+void media_enc_close(MediaEnc *encoder)
 {
     (void)encoder;
 }
 
-PmStatus pm_encoder_send(PmEncoder *encoder, const PmImage *image, int64_t pts_us)
+BaseStatus media_enc_send(MediaEnc *encoder, const BaseImage *image, int64_t pts_us)
 {
     (void)encoder;
     (void)image;
     (void)pts_us;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus pm_encoder_receive(PmEncoder *encoder, PmEncodedPacket *packet)
+BaseStatus media_enc_receive(MediaEnc *encoder, MediaEncPacket *packet)
 {
     (void)encoder;
     if (packet != NULL)
@@ -69,23 +69,23 @@ PmStatus pm_encoder_receive(PmEncoder *encoder, PmEncodedPacket *packet)
         packet->pts_us = 0;
         packet->key = 0;
     }
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-void pm_encoder_packet_free(PmEncodedPacket *packet)
+void media_enc_packet_free(MediaEncPacket *packet)
 {
     (void)packet;
 }
 
-PmStatus pm_encoder_request_keyframe(PmEncoder *encoder)
+BaseStatus media_enc_request_keyframe(MediaEnc *encoder)
 {
     (void)encoder;
-    return PM_ERR;
+    return BASE_ERR;
 }
 
-PmStatus pm_encoder_set_bitrate(PmEncoder *encoder, int bitrate)
+BaseStatus media_enc_set_bitrate(MediaEnc *encoder, int bitrate)
 {
     (void)encoder;
     (void)bitrate;
-    return PM_ERR;
+    return BASE_ERR;
 }

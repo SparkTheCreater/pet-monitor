@@ -14,9 +14,11 @@
 
 ## 媒体层
 
-媒体层放基础图像接口，目录是 `src/media`。
+媒体层放基础图像接口，目录是 `src/media`。库名是 `media`。
 
-- 解码：打开、送包、取帧、归还。参数集会转成 Annex B，色彩范围留在帧上。
-- 缩放、拷贝、转色：同一条 `pm_gfx_scale`。尺寸相同是拷贝，格式不同时顺带转色。
-- 画线、画框：画在调用方给出的图像上，不改解码帧的缓冲归属。
-- 视频编码：参数不合法返回失败。平台层还没有视频编码器，参数合法时返回不支持。JPEG 编码仍在平台层。
+- 解码：`media_dec_open`、`media_dec_send`、`media_dec_receive`、`media_dec_release`。类型是 `MediaDec`。
+- 缩放、拷贝、转色：`media_pic_scale`。尺寸相同是拷贝，格式不同时顺带转色。
+- 画线、画框：`media_pic_line`、`media_pic_box`。里面调用平台层对应的接口。
+- 视频编码：类型是 `MediaEnc`，打开用 `media_enc_open`。参数不合法返回失败。平台层还没有视频编码器时，参数合法也返回不支持。JPEG 编码仍在平台层。
+
+公共类型在 `base`，例如 `BaseImage`、`BaseStatus`、`BASE_OK`。平台层库名是 `plt`。

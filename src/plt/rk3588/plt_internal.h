@@ -2,10 +2,10 @@
  * @file    plt_internal.h
  * @brief   rk3588 各文件之间的内部接口，不对外。
  */
-#ifndef PM_PLT_INTERNAL_H
-#define PM_PLT_INTERNAL_H
+#ifndef PLT_INTERNAL_H
+#define PLT_INTERNAL_H
 
-#include "pm_image.h"
+#include "base_image.h"
 
 /* plt_init 已经成功。只给本目录的实现用。 */
 int plt_rk_ready(void);

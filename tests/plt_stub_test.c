@@ -13,13 +13,13 @@
 
 static int g_failed = 0;
 
-static void ExpectErr(PmStatus status, const char *name)
+static void ExpectErr(BaseStatus status, const char *name)
 {
-    if (status == PM_ERR)
+    if (status == BASE_ERR)
     {
         return;
     }
-    fprintf(stderr, "%s returned %d, want PM_ERR\n", name, (int)status);
+    fprintf(stderr, "%s returned %d, want BASE_ERR\n", name, (int)status);
     g_failed = 1;
 }
 
@@ -28,9 +28,9 @@ int main(void)
     ExpectErr(plt_init(), "plt_init");
     plt_deinit();
 
-    PmImage image;
-    ExpectErr(plt_mem_alloc(16, 16, PM_PIX_NV12, &image), "plt_mem_alloc");
-    if (pm_image_valid(&image))
+    BaseImage image;
+    ExpectErr(plt_mem_alloc(16, 16, BASE_PIX_NV12, &image), "plt_mem_alloc");
+    if (base_image_valid(&image))
     {
         fprintf(stderr, "alloc left a valid image\n");
         g_failed = 1;
@@ -39,7 +39,7 @@ int main(void)
     ExpectErr(plt_mem_flush(&image), "plt_mem_flush");
 
     PltVdec *dec = (PltVdec *)1;
-    ExpectErr(plt_vdec_open(PM_CODEC_H264, 4, &dec), "plt_vdec_open");
+    ExpectErr(plt_vdec_open(BASE_CODEC_H264, 4, &dec), "plt_vdec_open");
     if (dec != NULL)
     {
         fprintf(stderr, "vdec open left a handle\n");
@@ -47,7 +47,7 @@ int main(void)
     }
     plt_vdec_close(dec);
     ExpectErr(plt_vdec_send(NULL, NULL, 0, 0, 0), "plt_vdec_send");
-    PmDecodedFrame frame;
+    BaseDecodedFrame frame;
     ExpectErr(plt_vdec_get(NULL, &frame), "plt_vdec_get");
     ExpectErr(plt_vdec_release(NULL, &frame), "plt_vdec_release");
 

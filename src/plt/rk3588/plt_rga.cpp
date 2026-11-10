@@ -45,16 +45,16 @@ struct RgaImage
 
 int IsYuv(int format)
 {
-    return format == PM_PIX_NV12;
+    return format == BASE_PIX_NV12;
 }
 
 int RgaFormat(int format)
 {
-    if (format == PM_PIX_NV12)
+    if (format == BASE_PIX_NV12)
     {
         return RK_FORMAT_YCbCr_420_SP;
     }
-    if (format == PM_PIX_RGB888)
+    if (format == BASE_PIX_RGB888)
     {
         return RK_FORMAT_RGB_888;
     }
@@ -67,12 +67,12 @@ int RgaOk(IM_STATUS status)
 }
 
 #ifdef RK_3588
-int ImportFd(const PmImage *image, int format, rga_buffer_handle_t *handle, rga_buffer_t *buf)
+int ImportFd(const BaseImage *image, int format, rga_buffer_handle_t *handle, rga_buffer_t *buf)
 {
     *handle = importbuffer_fd(image->fd, image->size);
     if (*handle == 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     *buf = wrapbuffer_handle(*handle,
                              image->width,
@@ -80,39 +80,39 @@ int ImportFd(const PmImage *image, int format, rga_buffer_handle_t *handle, rga_
                              format,
                              image->hor_stride,
                              image->ver_stride);
-    return PM_OK;
+    return BASE_OK;
 }
 
 /*
  * 这块板子的 librga 1.9.3 不能把 NV12 直接改色彩范围，improcess 会返回不支持。
  * 先按源范围转到 RGB，再按目标范围转回 NV12。调用返回前临时缓冲已释放。
  */
-int ExpandRange(const PmImage *src, PmImage *dst)
+BaseStatus ExpandRange(const BaseImage *src, BaseImage *dst)
 {
-    PmImage rgb;
+    BaseImage rgb;
     memset(&rgb, 0, sizeof(rgb));
     rgb.fd = -1;
-    if (plt_mem_alloc(src->width, src->height, PM_PIX_RGB888, &rgb) != PM_OK)
+    if (plt_mem_alloc(src->width, src->height, BASE_PIX_RGB888, &rgb) != BASE_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
-    const int to_rgb = src->range == PM_RANGE_FULL ? IM_YUV_TO_RGB_BT601_FULL : IM_YUV_TO_RGB_BT601_LIMIT;
-    const int to_yuv = dst->range == PM_RANGE_FULL ? IM_RGB_TO_YUV_BT601_FULL : IM_RGB_TO_YUV_BT601_LIMIT;
+    const int to_rgb = src->range == BASE_RANGE_FULL ? IM_YUV_TO_RGB_BT601_FULL : IM_YUV_TO_RGB_BT601_LIMIT;
+    const int to_yuv = dst->range == BASE_RANGE_FULL ? IM_RGB_TO_YUV_BT601_FULL : IM_RGB_TO_YUV_BT601_LIMIT;
     rga_buffer_handle_t src_handle = 0;
     rga_buffer_handle_t rgb_handle = 0;
     rga_buffer_handle_t dst_handle = 0;
     rga_buffer_t src_buf;
     rga_buffer_t rgb_buf;
     rga_buffer_t dst_buf;
-    int ret = PM_ERR;
-    if (ImportFd(src, RK_FORMAT_YCbCr_420_SP, &src_handle, &src_buf) == PM_OK &&
-        ImportFd(&rgb, RK_FORMAT_RGB_888, &rgb_handle, &rgb_buf) == PM_OK &&
-        ImportFd(dst, RK_FORMAT_YCbCr_420_SP, &dst_handle, &dst_buf) == PM_OK &&
+    BaseStatus ret = BASE_ERR;
+    if (ImportFd(src, RK_FORMAT_YCbCr_420_SP, &src_handle, &src_buf) == BASE_OK &&
+        ImportFd(&rgb, RK_FORMAT_RGB_888, &rgb_handle, &rgb_buf) == BASE_OK &&
+        ImportFd(dst, RK_FORMAT_YCbCr_420_SP, &dst_handle, &dst_buf) == BASE_OK &&
         RgaOk(imcvtcolor(src_buf, rgb_buf, RK_FORMAT_YCbCr_420_SP, RK_FORMAT_RGB_888, to_rgb, 1)) &&
         RgaOk(imcvtcolor(rgb_buf, dst_buf, RK_FORMAT_RGB_888, RK_FORMAT_YCbCr_420_SP, to_yuv, 1)))
     {
-        ret = PM_OK;
+        ret = BASE_OK;
     }
     if (src_handle != 0)
     {
@@ -127,7 +127,7 @@ int ExpandRange(const PmImage *src, PmImage *dst)
         releasebuffer_handle(dst_handle);
     }
     plt_mem_free(&rgb);
-    if (ret != PM_OK)
+    if (ret != BASE_OK)
     {
         fprintf(stderr, "[plt.rga] range conversion failed\n");
     }
@@ -135,7 +135,7 @@ int ExpandRange(const PmImage *src, PmImage *dst)
 }
 #endif
 
-Span Whole(const PmImage *image)
+Span Whole(const BaseImage *image)
 {
     Span span;
     span.x = 0;
@@ -145,7 +145,7 @@ Span Whole(const PmImage *image)
     return span;
 }
 
-Span FromRect(const PmImage *image, const PmRect *rect)
+Span FromRect(const BaseImage *image, const BaseRect *rect)
 {
     if (rect == nullptr)
     {
@@ -171,13 +171,13 @@ int ClipMapped(Span src, int src_w, int src_h, Span dst, int dst_w, int dst_h, S
 {
     if (src.w < 0 || src.h < 0 || dst.w < 0 || dst.h < 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (src.w == 0 || src.h == 0 || dst.w == 0 || dst.h == 0)
     {
         ClearSpan(src_out);
         ClearSpan(dst_out);
-        return PM_OK;
+        return BASE_OK;
     }
 
     const int dx0 = dst.x;
@@ -192,7 +192,7 @@ int ClipMapped(Span src, int src_w, int src_h, Span dst, int dst_w, int dst_h, S
     {
         ClearSpan(src_out);
         ClearSpan(dst_out);
-        return PM_OK;
+        return BASE_OK;
     }
 
     int sx0 = src.x + (int)(((int64_t)(cx0 - dx0) * src.w) / dst.w);
@@ -216,7 +216,7 @@ int ClipMapped(Span src, int src_w, int src_h, Span dst, int dst_w, int dst_h, S
     {
         ClearSpan(src_out);
         ClearSpan(dst_out);
-        return PM_OK;
+        return BASE_OK;
     }
 
     const int64_t sw = sx1 - sx0;
@@ -231,7 +231,7 @@ int ClipMapped(Span src, int src_w, int src_h, Span dst, int dst_w, int dst_h, S
     {
         ClearSpan(src_out);
         ClearSpan(dst_out);
-        return PM_OK;
+        return BASE_OK;
     }
 
     src_out->x = qx0;
@@ -242,7 +242,7 @@ int ClipMapped(Span src, int src_w, int src_h, Span dst, int dst_w, int dst_h, S
     dst_out->y = ny0;
     dst_out->w = nx1 - nx0;
     dst_out->h = ny1 - ny0;
-    return PM_OK;
+    return BASE_OK;
 }
 
 void AlignEven(Span *span)
@@ -274,17 +274,17 @@ im_rect ToRect(const Span *span)
     return rect;
 }
 
-int Import(const PmImage *image, RgaImage *out)
+int Import(const BaseImage *image, RgaImage *out)
 {
     const int format = RgaFormat(image->format);
     if (format < 0 || image->fd < 0 || image->size <= 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     out->handle = importbuffer_fd(image->fd, image->size);
     if (out->handle == 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     out->buf = wrapbuffer_handle(out->handle,
                                  image->width,
@@ -292,7 +292,7 @@ int Import(const PmImage *image, RgaImage *out)
                                  format,
                                  image->hor_stride,
                                  image->ver_stride);
-    return PM_OK;
+    return BASE_OK;
 }
 
 uint32_t PackColor(uint32_t rgb)
@@ -304,16 +304,16 @@ uint32_t PackColor(uint32_t rgb)
     return 0xff000000u | (b << 16) | (g << 8) | r;
 }
 
-int ClipBox(const PmImage *image, const PmRect *box, Span *out)
+int ClipBox(const BaseImage *image, const BaseRect *box, Span *out)
 {
     if (box->w < 0 || box->h < 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (box->w == 0 || box->h == 0)
     {
         ClearSpan(out);
-        return PM_OK;
+        return BASE_OK;
     }
     int x0 = box->x;
     int y0 = box->y;
@@ -343,24 +343,24 @@ int ClipBox(const PmImage *image, const PmRect *box, Span *out)
     {
         ClearSpan(out);
     }
-    return PM_OK;
+    return BASE_OK;
 }
 
 }
 
-extern "C" PmStatus plt_rga_blit(const PmImage *src, const PmRect *src_rect, PmImage *dst, const PmRect *dst_rect)
+extern "C" BaseStatus plt_rga_blit(const BaseImage *src, const BaseRect *src_rect, BaseImage *dst, const BaseRect *dst_rect)
 {
-    if (!pm_image_valid(src) || !pm_image_valid(dst))
+    if (!base_image_valid(src) || !base_image_valid(dst))
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (src->fd == dst->fd)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (RgaFormat(src->format) < 0 || RgaFormat(dst->format) < 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     Span src_span;
@@ -373,9 +373,9 @@ extern "C" PmStatus plt_rga_blit(const PmImage *src, const PmRect *src_rect, PmI
                                    dst->height,
                                    &src_span,
                                    &dst_span);
-    if (clipped != PM_OK)
+    if (clipped != BASE_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (IsYuv(src->format))
     {
@@ -387,25 +387,25 @@ extern "C" PmStatus plt_rga_blit(const PmImage *src, const PmRect *src_rect, PmI
     }
     if (TooSmall(&src_span) || TooSmall(&dst_span))
     {
-        return PM_OK;
+        return BASE_OK;
     }
 
     RgaImage src_image;
     RgaImage dst_image;
-    if (Import(src, &src_image) != PM_OK || Import(dst, &dst_image) != PM_OK)
+    if (Import(src, &src_image) != BASE_OK || Import(dst, &dst_image) != BASE_OK)
     {
         fprintf(stderr, "[plt.rga] import buffer failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     int usage = IM_SYNC;
     if (IsYuv(src->format) && !IsYuv(dst->format))
     {
-        usage |= src->range == PM_RANGE_FULL ? IM_YUV_TO_RGB_BT601_FULL : IM_YUV_TO_RGB_BT601_LIMIT;
+        usage |= src->range == BASE_RANGE_FULL ? IM_YUV_TO_RGB_BT601_FULL : IM_YUV_TO_RGB_BT601_LIMIT;
     }
     else if (!IsYuv(src->format) && IsYuv(dst->format))
     {
-        usage |= dst->range == PM_RANGE_FULL ? IM_RGB_TO_YUV_BT601_FULL : IM_RGB_TO_YUV_BT601_LIMIT;
+        usage |= dst->range == BASE_RANGE_FULL ? IM_RGB_TO_YUV_BT601_FULL : IM_RGB_TO_YUV_BT601_LIMIT;
     }
     else if (IsYuv(src->format) && IsYuv(dst->format) && src->range != dst->range)
     {
@@ -414,9 +414,9 @@ extern "C" PmStatus plt_rga_blit(const PmImage *src, const PmRect *src_rect, PmI
 #else
 #ifdef RK_3568
         imsetColorSpace(&src_image.buf,
-                        src->range == PM_RANGE_FULL ? IM_YUV_BT601_FULL_RANGE : IM_YUV_BT601_LIMIT_RANGE);
+                        src->range == BASE_RANGE_FULL ? IM_YUV_BT601_FULL_RANGE : IM_YUV_BT601_LIMIT_RANGE);
         imsetColorSpace(&dst_image.buf,
-                        dst->range == PM_RANGE_FULL ? IM_YUV_BT601_FULL_RANGE : IM_YUV_BT601_LIMIT_RANGE);
+                        dst->range == BASE_RANGE_FULL ? IM_YUV_BT601_FULL_RANGE : IM_YUV_BT601_LIMIT_RANGE);
 #endif
 #endif
     }
@@ -438,40 +438,40 @@ extern "C" PmStatus plt_rga_blit(const PmImage *src, const PmRect *src_rect, PmI
     if (!RgaOk(status))
     {
         fprintf(stderr, "[plt.rga] blit failed %d\n", (int)status);
-        return PM_ERR;
+        return BASE_ERR;
     }
-    return PM_OK;
+    return BASE_OK;
 }
 
-extern "C" PmStatus plt_rga_boxes(PmImage *dst, const PmRect *boxes, int count, uint32_t rgb, int thickness)
+extern "C" BaseStatus plt_rga_boxes(BaseImage *dst, const BaseRect *boxes, int count, uint32_t rgb, int thickness)
 {
-    if (!pm_image_valid(dst) || thickness <= 0 || RgaFormat(dst->format) < 0)
+    if (!base_image_valid(dst) || thickness <= 0 || RgaFormat(dst->format) < 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (count < 0 || (count > 0 && boxes == nullptr))
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (count == 0)
     {
-        return PM_OK;
+        return BASE_OK;
     }
 
     RgaImage image;
-    if (Import(dst, &image) != PM_OK)
+    if (Import(dst, &image) != BASE_OK)
     {
         fprintf(stderr, "[plt.rga] import buffer failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     const uint32_t color = PackColor(rgb);
     for (int i = 0; i < count; ++i)
     {
         Span box;
-        if (ClipBox(dst, &boxes[i], &box) != PM_OK)
+        if (ClipBox(dst, &boxes[i], &box) != BASE_OK)
         {
-            return PM_ERR;
+            return BASE_ERR;
         }
         if (IsYuv(dst->format))
         {
@@ -485,8 +485,8 @@ extern "C" PmStatus plt_rga_boxes(PmImage *dst, const PmRect *boxes, int count, 
         if (!RgaOk(status))
         {
             fprintf(stderr, "[plt.rga] box failed %d\n", (int)status);
-            return PM_ERR;
+            return BASE_ERR;
         }
     }
-    return PM_OK;
+    return BASE_OK;
 }

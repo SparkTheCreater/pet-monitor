@@ -90,7 +90,7 @@ int CommitExternal(PltVdec *dec, size_t buf_size)
         mpp_buffer_group_get_internal(&pool->alloc_group, type) != MPP_OK ||
         mpp_buffer_group_get_external(&pool->ext_group, type) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     pool->bufs.assign((size_t)dec->buf_count, nullptr);
@@ -98,7 +98,7 @@ int CommitExternal(PltVdec *dec, size_t buf_size)
     {
         if (mpp_buffer_get(pool->alloc_group, &pool->bufs[(size_t)i], buf_size) != MPP_OK)
         {
-            return PM_ERR;
+            return BASE_ERR;
         }
         /*
          * 分配组里的缓冲必须一直留着，提交给解码器的只是同一块 dmabuf 的描述。
@@ -113,15 +113,15 @@ int CommitExternal(PltVdec *dec, size_t buf_size)
         info.index = i;
         if (info.fd < 0 || mpp_buffer_commit(pool->ext_group, &info) != MPP_OK)
         {
-            return PM_ERR;
+            return BASE_ERR;
         }
     }
     if (dec->mpi->control(dec->ctx, MPP_DEC_SET_EXT_BUF_GROUP, pool->ext_group) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     pool->buf_size = buf_size;
-    return PM_OK;
+    return BASE_OK;
 }
 
 int SetupHalf(PltVdec *dec, size_t buf_size)
@@ -131,18 +131,18 @@ int SetupHalf(PltVdec *dec, size_t buf_size)
     const int type = plt_rk_dma_type();
     if (type == 0 || mpp_buffer_group_get_internal(&pool->half_group, type) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (mpp_buffer_group_limit_config(pool->half_group, buf_size, dec->buf_count) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (dec->mpi->control(dec->ctx, MPP_DEC_SET_EXT_BUF_GROUP, pool->half_group) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     pool->buf_size = buf_size;
-    return PM_OK;
+    return BASE_OK;
 }
 
 int SetupPool(PltVdec *dec, MppFrame frame)
@@ -161,11 +161,11 @@ int SetupPool(PltVdec *dec, MppFrame frame)
     if (dec->pool.buf_size == buf_size &&
         (dec->pool.ext_group != nullptr || dec->pool.half_group != nullptr))
     {
-        return PM_OK;
+        return BASE_OK;
     }
 
     Pool old;
-    int ret = PM_ERR;
+    int ret = BASE_ERR;
     try
     {
         old.alloc_group = dec->pool.alloc_group;
@@ -179,11 +179,11 @@ int SetupPool(PltVdec *dec, MppFrame frame)
         dec->pool.buf_size = 0;
 
         ret = CommitExternal(dec, buf_size);
-        if (ret != PM_OK)
+        if (ret != BASE_OK)
         {
             ClearPool(&dec->pool);
             ret = SetupHalf(dec, buf_size);
-            if (ret == PM_OK)
+            if (ret == BASE_OK)
             {
                 fprintf(stderr, "[plt.vdec] external pool failed, using limited internal group\n");
             }
@@ -193,10 +193,10 @@ int SetupPool(PltVdec *dec, MppFrame frame)
     {
         ClearPool(&dec->pool);
         ClearPool(&old);
-        return PM_ERR;
+        return BASE_ERR;
     }
     ClearPool(&old);
-    if (ret != PM_OK)
+    if (ret != BASE_OK)
     {
         fprintf(stderr, "[plt.vdec] setup buffer pool failed\n");
     }
@@ -207,19 +207,19 @@ int AcceptInfoChange(PltVdec *dec, MppFrame frame)
 {
     const int ret = SetupPool(dec, frame);
     mpp_frame_deinit(&frame);
-    if (ret != PM_OK)
+    if (ret != BASE_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (dec->mpi->control(dec->ctx, MPP_DEC_SET_INFO_CHANGE_READY, nullptr) != MPP_OK)
     {
         fprintf(stderr, "[plt.vdec] info change ready failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
-    return PM_OK;
+    return BASE_OK;
 }
 
-void ClearFrame(PmDecodedFrame *frame)
+void ClearFrame(BaseDecodedFrame *frame)
 {
     memset(frame, 0, sizeof(*frame));
     frame->image.fd = -1;
@@ -227,7 +227,7 @@ void ClearFrame(PmDecodedFrame *frame)
 
 }
 
-extern "C" PmStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
+extern "C" BaseStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
 {
     if (out == nullptr || buf_count <= 0 || !plt_rk_ready())
     {
@@ -235,25 +235,25 @@ extern "C" PmStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
         {
             *out = nullptr;
         }
-        return PM_ERR;
+        return BASE_ERR;
     }
     *out = nullptr;
-    if (codec != PM_CODEC_H264 && codec != PM_CODEC_H265)
+    if (codec != BASE_CODEC_H264 && codec != BASE_CODEC_H265)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     PltVdec *dec = new (std::nothrow) PltVdec();
     if (dec == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     dec->buf_count = buf_count;
 
     if (mpp_create(&dec->ctx, &dec->mpi) != MPP_OK)
     {
         delete dec;
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     /* 这套 MPP 按 RK_S64 读超时。非阻塞，取不到帧就让调用方先去送下一包。 */
@@ -261,12 +261,12 @@ extern "C" PmStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
     dec->mpi->control(dec->ctx, MPP_SET_INPUT_TIMEOUT, &timeout);
     dec->mpi->control(dec->ctx, MPP_SET_OUTPUT_TIMEOUT, &timeout);
 
-    const MppCodingType coding = codec == PM_CODEC_H265 ? MPP_VIDEO_CodingHEVC : MPP_VIDEO_CodingAVC;
+    const MppCodingType coding = codec == BASE_CODEC_H265 ? MPP_VIDEO_CodingHEVC : MPP_VIDEO_CodingAVC;
     if (mpp_init(dec->ctx, MPP_CTX_DEC, coding) != MPP_OK)
     {
         mpp_destroy(dec->ctx);
         delete dec;
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     MppDecCfg cfg = nullptr;
@@ -282,7 +282,7 @@ extern "C" PmStatus plt_vdec_open(int codec, int buf_count, PltVdec **out)
     RK_U32 fmt = MPP_FMT_YUV420SP;
     dec->mpi->control(dec->ctx, MPP_DEC_SET_OUTPUT_FORMAT, &fmt);
     *out = dec;
-    return PM_OK;
+    return BASE_OK;
 }
 
 extern "C" void plt_vdec_close(PltVdec *dec)
@@ -305,22 +305,22 @@ extern "C" void plt_vdec_close(PltVdec *dec)
     delete dec;
 }
 
-extern "C" PmStatus plt_vdec_send(PltVdec *dec, const uint8_t *data, int len, int64_t pts_us, int eos)
+extern "C" BaseStatus plt_vdec_send(PltVdec *dec, const uint8_t *data, int len, int64_t pts_us, int eos)
 {
     if (dec == nullptr || dec->mpi == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if ((data == nullptr || len <= 0) && !eos)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     MppPacket packet = nullptr;
     const size_t size = len > 0 ? (size_t)len : 0;
     if (mpp_packet_init(&packet, (void *)data, size) != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     mpp_packet_set_pts(packet, pts_us);
     if (eos)
@@ -332,20 +332,20 @@ extern "C" PmStatus plt_vdec_send(PltVdec *dec, const uint8_t *data, int len, in
     mpp_packet_deinit(&packet);
     if (ret == MPP_ERR_BUFFER_FULL)
     {
-        return PM_AGAIN;
+        return BASE_AGAIN;
     }
     if (ret != MPP_OK)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    return PM_OK;
+    return BASE_OK;
 }
 
-extern "C" PmStatus plt_vdec_get(PltVdec *dec, PmDecodedFrame *frame)
+extern "C" BaseStatus plt_vdec_get(PltVdec *dec, BaseDecodedFrame *frame)
 {
     if (dec == nullptr || dec->mpi == nullptr || frame == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     ClearFrame(frame);
 
@@ -356,17 +356,17 @@ extern "C" PmStatus plt_vdec_get(PltVdec *dec, PmDecodedFrame *frame)
         const MPP_RET ret = dec->mpi->decode_get_frame(dec->ctx, &raw);
         if (ret != MPP_OK && ret != MPP_ERR_TIMEOUT)
         {
-            return PM_ERR;
+            return BASE_ERR;
         }
         if (raw == nullptr)
         {
-            return PM_AGAIN;
+            return BASE_AGAIN;
         }
         if (mpp_frame_get_info_change(raw))
         {
-            if (AcceptInfoChange(dec, raw) != PM_OK)
+            if (AcceptInfoChange(dec, raw) != BASE_OK)
             {
-                return PM_ERR;
+                return BASE_ERR;
             }
             continue;
         }
@@ -383,7 +383,7 @@ extern "C" PmStatus plt_vdec_get(PltVdec *dec, PmDecodedFrame *frame)
             frame->eos = 1;
             frame->pts_us = mpp_frame_get_pts(raw);
             frame->owner = raw;
-            return PM_OK;
+            return BASE_OK;
         }
 
         const MppFrameFormat fmt = mpp_frame_get_fmt(raw);
@@ -392,7 +392,7 @@ extern "C" PmStatus plt_vdec_get(PltVdec *dec, PmDecodedFrame *frame)
             fprintf(stderr, "[plt.vdec] unsupported output format 0x%x\n", (unsigned)fmt);
             mpp_frame_deinit(&raw);
             ClearFrame(frame);
-            return PM_UNSUPPORTED;
+            return BASE_UNSUPPORTED;
         }
 
         const MppFrameColorRange range = mpp_frame_get_color_range(raw);
@@ -403,28 +403,28 @@ extern "C" PmStatus plt_vdec_get(PltVdec *dec, PmDecodedFrame *frame)
         frame->image.height = (int)mpp_frame_get_height(raw);
         frame->image.hor_stride = (int)mpp_frame_get_hor_stride(raw);
         frame->image.ver_stride = (int)mpp_frame_get_ver_stride(raw);
-        frame->image.format = PM_PIX_NV12;
-        frame->image.range = range == MPP_FRAME_RANGE_JPEG ? PM_RANGE_FULL : PM_RANGE_LIMITED;
+        frame->image.format = BASE_PIX_NV12;
+        frame->image.range = range == MPP_FRAME_RANGE_JPEG ? BASE_RANGE_FULL : BASE_RANGE_LIMITED;
         frame->image.handle = buffer;
         frame->image.refcount = 1;
         frame->pts_us = mpp_frame_get_pts(raw);
         frame->eos = eos;
         frame->owner = raw;
-        return PM_OK;
+        return BASE_OK;
     }
-    return PM_AGAIN;
+    return BASE_AGAIN;
 }
 
-extern "C" PmStatus plt_vdec_release(PltVdec *dec, PmDecodedFrame *frame)
+extern "C" BaseStatus plt_vdec_release(PltVdec *dec, BaseDecodedFrame *frame)
 {
     (void)dec;
     if (frame == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     if (frame->owner == nullptr)
     {
-        return PM_OK;
+        return BASE_OK;
     }
     /*
      * deinit 只减这一帧的引用。缓冲仍在池里，解码器还会复用同一块 fd。
@@ -436,5 +436,5 @@ extern "C" PmStatus plt_vdec_release(PltVdec *dec, PmDecodedFrame *frame)
     frame->image.handle = nullptr;
     frame->image.fd = -1;
     frame->image.refcount = 0;
-    return PM_OK;
+    return BASE_OK;
 }

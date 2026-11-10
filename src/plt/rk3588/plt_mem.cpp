@@ -22,9 +22,9 @@ struct DmaSync
     uint64_t flags;
 };
 
-#ifndef PM_DMA_BUF_IOCTL_SYNC
-#define PM_DMA_BUF_BASE 'b'
-#define PM_DMA_BUF_IOCTL_SYNC _IOW(PM_DMA_BUF_BASE, 0, DmaSync)
+#ifndef PLT_DMA_BUF_IOCTL_SYNC
+#define PLT_DMA_BUF_BASE 'b'
+#define PLT_DMA_BUF_IOCTL_SYNC _IOW(PLT_DMA_BUF_BASE, 0, DmaSync)
 #endif
 
 const uint64_t kSyncWrite = 2;
@@ -47,14 +47,14 @@ int TryGroup(int type)
     MppBufferGroup group = nullptr;
     if (mpp_buffer_group_get_internal(&group, type) != MPP_OK || group == nullptr)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     g_type.store(type);
     g_group.store(group);
-    return PM_OK;
+    return BASE_OK;
 }
 
-void ClearImage(PmImage *image)
+void ClearImage(BaseImage *image)
 {
     if (image == nullptr)
     {
@@ -79,22 +79,22 @@ int plt_rk_dma_type(void)
 int plt_rk_mem_open(void)
 {
     const int dma32 = (int)MPP_BUFFER_TYPE_DMA_HEAP | (int)MPP_BUFFER_FLAGS_DMA32;
-    if (TryGroup(dma32) == PM_OK)
+    if (TryGroup(dma32) == BASE_OK)
     {
-        return PM_OK;
+        return BASE_OK;
     }
     fprintf(stderr, "[plt.mem] dma32 heap unavailable, trying dma heap\n");
-    if (TryGroup((int)MPP_BUFFER_TYPE_DMA_HEAP) == PM_OK)
+    if (TryGroup((int)MPP_BUFFER_TYPE_DMA_HEAP) == BASE_OK)
     {
-        return PM_OK;
+        return BASE_OK;
     }
     fprintf(stderr, "[plt.mem] dma heap unavailable, trying drm\n");
-    if (TryGroup((int)MPP_BUFFER_TYPE_DRM) == PM_OK)
+    if (TryGroup((int)MPP_BUFFER_TYPE_DRM) == BASE_OK)
     {
-        return PM_OK;
+        return BASE_OK;
     }
     fprintf(stderr, "[plt.mem] no image allocator\n");
-    return PM_ERR;
+    return BASE_ERR;
 }
 
 void plt_rk_mem_close(void)
@@ -107,28 +107,28 @@ void plt_rk_mem_close(void)
     }
 }
 
-extern "C" PmStatus plt_mem_alloc(int width, int height, int format, PmImage *out)
+extern "C" BaseStatus plt_mem_alloc(int width, int height, int format, BaseImage *out)
 {
     if (out == nullptr || width <= 0 || height <= 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    if (format != PM_PIX_NV12 && format != PM_PIX_RGB888)
+    if (format != BASE_PIX_NV12 && format != BASE_PIX_RGB888)
     {
         ClearImage(out);
-        return PM_ERR;
+        return BASE_ERR;
     }
     MppBufferGroup group = g_group.load();
     if (group == nullptr)
     {
         ClearImage(out);
         fprintf(stderr, "[plt.mem] alloc before plt_init\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     const int hor = Align16(width);
     const int ver = Align16(height);
-    const size_t bytes = format == PM_PIX_NV12
+    const size_t bytes = format == BASE_PIX_NV12
                              ? (size_t)hor * (size_t)ver * 3 / 2
                              : (size_t)hor * (size_t)ver * 3;
     MppBuffer buffer = nullptr;
@@ -136,7 +136,7 @@ extern "C" PmStatus plt_mem_alloc(int width, int height, int format, PmImage *ou
     {
         ClearImage(out);
         fprintf(stderr, "[plt.mem] get buffer failed\n");
-        return PM_ERR;
+        return BASE_ERR;
     }
 
     memset(out, 0, sizeof(*out));
@@ -148,21 +148,21 @@ extern "C" PmStatus plt_mem_alloc(int width, int height, int format, PmImage *ou
     out->hor_stride = hor;
     out->ver_stride = ver;
     out->format = format;
-    out->range = PM_RANGE_LIMITED;
+    out->range = BASE_RANGE_LIMITED;
     out->handle = buffer;
     out->refcount = 1;
     if (out->fd < 0 || out->ptr == nullptr || out->size <= 0)
     {
         mpp_buffer_put(buffer);
         ClearImage(out);
-        return PM_ERR;
+        return BASE_ERR;
     }
-    return PM_OK;
+    return BASE_OK;
 }
 
-extern "C" void plt_mem_free(PmImage *image)
+extern "C" void plt_mem_free(BaseImage *image)
 {
-    if (!pm_image_valid(image))
+    if (!base_image_valid(image))
     {
         ClearImage(image);
         return;
@@ -171,17 +171,17 @@ extern "C" void plt_mem_free(PmImage *image)
     ClearImage(image);
 }
 
-extern "C" PmStatus plt_mem_flush(PmImage *image)
+extern "C" BaseStatus plt_mem_flush(BaseImage *image)
 {
-    if (!pm_image_valid(image) || image->fd < 0)
+    if (!base_image_valid(image) || image->fd < 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
     DmaSync sync;
     sync.flags = kSyncWrite | kSyncEnd;
-    if (ioctl(image->fd, PM_DMA_BUF_IOCTL_SYNC, &sync) != 0)
+    if (ioctl(image->fd, PLT_DMA_BUF_IOCTL_SYNC, &sync) != 0)
     {
-        return PM_ERR;
+        return BASE_ERR;
     }
-    return PM_OK;
+    return BASE_OK;
 }

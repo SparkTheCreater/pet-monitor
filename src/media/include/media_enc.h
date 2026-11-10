@@ -76,6 +76,29 @@ BaseStatus media_enc_request_keyframe(MediaEnc *enc);
 /* 下一帧起用新的目标码率。码率模式和 QP 不变。 */
 BaseStatus media_enc_set_bitrate(MediaEnc *enc, int bitrate);
 
+/* 一块感兴趣区域。坐标和宽高按像素，必须 16 对齐，并且落在画面里。 */
+typedef struct MediaEncRoi
+{
+    int x;
+    int y;
+    int w;
+    int h;
+    /* 1 用绝对 QP，0 在当前 QP 上加减。 */
+    int abs_qp;
+    /* 绝对时 0–51。相对时 -51–51。 */
+    int qp;
+    /* 1 这块强制帧内编码。 */
+    int intra;
+}
+MediaEncRoi;
+
+/*
+ * 设置下一帧起的感兴趣区域。最多 8 块，count 为 0 时清掉。
+ * 和 send 由调用方串行调用。不合法时保持原配置。
+ * 平台层还没有视频编码器时返回 BASE_ERR。
+ */
+BaseStatus media_enc_set_roi(MediaEnc *enc, const MediaEncRoi *regions, int count);
+
 #ifdef __cplusplus
 }
 #endif

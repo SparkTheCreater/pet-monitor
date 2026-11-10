@@ -89,3 +89,11 @@ BaseStatus media_enc_set_bitrate(MediaEnc *encoder, int bitrate)
     (void)bitrate;
     return BASE_ERR;
 }
+
+BaseStatus media_enc_set_roi(MediaEnc *encoder, const MediaEncRoi *regions, int count)
+{
+    (void)encoder;
+    (void)regions;
+    (void)count;
+    return BASE_ERR;
+}

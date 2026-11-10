@@ -1,12 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
-project(pet-monitor LANGUAGES C CXX)
+project(pet-monitor LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(PM_PLATFORM "stub" CACHE STRING "plt implementation: stub or rk3588")
 set_property(CACHE PM_PLATFORM PROPERTY STRINGS stub rk3588)
@@ -55,31 +52,9 @@ endif()
 
 target_link_libraries(pm_plt PUBLIC pm_base)
 
-find_package(Threads REQUIRED)
-add_library(pm_media STATIC
-    src/media/packet_queue.cpp
-    src/media/channel.cpp
-)
-target_include_directories(pm_media
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include
-    PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/media
-)
-target_link_libraries(pm_media PUBLIC pm_plt Threads::Threads)
-
 if(PM_PLATFORM STREQUAL "stub")
     enable_testing()
     add_executable(plt_stub_test tests/plt_stub_test.c)
     target_link_libraries(plt_stub_test PRIVATE pm_plt)
     add_test(NAME plt_stub_test COMMAND plt_stub_test)
-
-    add_executable(packet_queue_test tests/packet_queue_test.cpp)
-    target_include_directories(packet_queue_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/media)
-    target_link_libraries(packet_queue_test PRIVATE pm_media)
-    add_test(NAME packet_queue_test COMMAND packet_queue_test)
-
-    add_executable(channel_stub_test tests/channel_stub_test.c)
-    target_link_libraries(channel_stub_test PRIVATE pm_media)
-    add_test(NAME channel_stub_test COMMAND channel_stub_test)
 endif()

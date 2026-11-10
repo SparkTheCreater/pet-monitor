@@ -86,9 +86,10 @@ int CommitExternal(PltVdec *dec, size_t buf_size)
 {
     Pool *pool = &dec->pool;
     const int type = plt_rk_dma_type();
+    const MppBufferType dma = (MppBufferType)type;
     if (type == 0 ||
-        mpp_buffer_group_get_internal(&pool->alloc_group, type) != MPP_OK ||
-        mpp_buffer_group_get_external(&pool->ext_group, type) != MPP_OK)
+        mpp_buffer_group_get_internal(&pool->alloc_group, dma) != MPP_OK ||
+        mpp_buffer_group_get_external(&pool->ext_group, dma) != MPP_OK)
     {
         return BASE_ERR;
     }
@@ -129,7 +130,8 @@ int SetupHalf(PltVdec *dec, size_t buf_size)
     Pool *pool = &dec->pool;
     ClearPool(pool);
     const int type = plt_rk_dma_type();
-    if (type == 0 || mpp_buffer_group_get_internal(&pool->half_group, type) != MPP_OK)
+    const MppBufferType dma = (MppBufferType)type;
+    if (type == 0 || mpp_buffer_group_get_internal(&pool->half_group, dma) != MPP_OK)
     {
         return BASE_ERR;
     }

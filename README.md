@@ -10,7 +10,7 @@
 
 `PM_PLATFORM` 选 `stub` 或 `rk3588`。`stub` 的 `plt_init` 会失败，用来在没有芯片的机器上编译和跑接口测试。`rk3588` 需要本机的 MPP、librga、RKNN 头文件，用 `PM_MPP_INCLUDE`、`PM_RGA_INCLUDE`、`PM_RKNN_INCLUDE` 指过去。芯片头文件不放进仓库。
 
-公开接口是 C。RK3588 的实现用 C++11 编译，因为 librga 的头文件带 C++ 默认参数。
+公开接口是 C。C++11 用于两处：RK3588 平台层，因为 librga 的头文件带 C++ 默认参数；应用层发信。
 
 ## 媒体层
 
@@ -24,3 +24,7 @@
 - 视频编码：类型是 `MediaEnc`，打开用 `media_enc_open`。参数不合法返回失败。平台层没有视频编码器时，参数合法也返回不支持。送帧、取流、关键帧、改码率和感兴趣区域都交给已打开的编码器。感兴趣区域由调用方给出，这里不按画面区域改写。
 
 公共类型在 `base`，例如 `BaseImage`、`BaseStatus`、`BASE_OK`。平台层库名是 `plt`。
+
+## 应用层
+
+应用层目前只放发信。目录是 `src/app`，库名是 `app`。头文件在 `src/app/include`，接口是 `app_email_send`。实现用 C++11，依赖 OpenSSL。

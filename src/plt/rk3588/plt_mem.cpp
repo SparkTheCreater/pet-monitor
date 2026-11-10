@@ -45,7 +45,7 @@ int Align16(int value)
 int TryGroup(int type)
 {
     MppBufferGroup group = nullptr;
-    if (mpp_buffer_group_get_internal(&group, type) != MPP_OK || group == nullptr)
+    if (mpp_buffer_group_get_internal(&group, (MppBufferType)type) != MPP_OK || group == nullptr)
     {
         return BASE_ERR;
     }

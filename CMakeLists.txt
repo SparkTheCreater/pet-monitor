@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
-project(pet-monitor LANGUAGES C)
+project(pet-monitor LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(PM_PLATFORM "stub" CACHE STRING "plt implementation: stub or rk3588")
 set_property(CACHE PM_PLATFORM PROPERTY STRINGS stub rk3588)
@@ -15,11 +19,6 @@ add_library(base INTERFACE)
 target_include_directories(base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include)
 
 if(PM_PLATFORM STREQUAL "rk3588")
-    enable_language(CXX)
-    set(CMAKE_CXX_STANDARD 11)
-    set(CMAKE_CXX_STANDARD_REQUIRED ON)
-    set(CMAKE_CXX_EXTENSIONS OFF)
-
     set(PM_MPP_INCLUDE "" CACHE PATH "MPP headers")
     set(PM_RGA_INCLUDE "" CACHE PATH "librga headers")
     set(PM_RKNN_INCLUDE "" CACHE PATH "RKNN headers")
@@ -62,6 +61,13 @@ add_library(media STATIC
 target_include_directories(media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include)
 target_link_libraries(media PUBLIC plt)
 
+find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
+
+add_library(app STATIC src/app/app_email.cpp)
+target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/app/include)
+target_link_libraries(app PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+
 if(PM_PLATFORM STREQUAL "stub")
     enable_testing()
     add_executable(plt_stub_test tests/plt_stub_test.c)
@@ -71,4 +77,8 @@ if(PM_PLATFORM STREQUAL "stub")
     add_executable(media_stub_test tests/media_stub_test.c)
     target_link_libraries(media_stub_test PRIVATE media)
     add_test(NAME media_stub_test COMMAND media_stub_test)
+
+    add_executable(app_email_test tests/app_email_test.c)
+    target_link_libraries(app_email_test PRIVATE app)
+    add_test(NAME app_email_test COMMAND app_email_test)
 endif()

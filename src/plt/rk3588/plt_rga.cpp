@@ -346,6 +346,24 @@ int ClipBox(const BaseImage *image, const BaseRect *box, Span *out)
     return BASE_OK;
 }
 
+int PairOk(const BaseImage *src, const BaseImage *dst)
+{
+    return src != nullptr && dst != nullptr && src != dst && base_image_valid(src) && base_image_valid(dst) &&
+           src->handle != dst->handle && src->format == dst->format && RgaFormat(src->format) >= 0 &&
+           src->width >= 2 && src->height >= 2 &&
+           (!IsYuv(src->format) || ((src->width & 1) == 0 && (src->height & 1) == 0));
+}
+
+int SameSize(const BaseImage *src, const BaseImage *dst)
+{
+    return src->width == dst->width && src->height == dst->height;
+}
+
+int SwappedSize(const BaseImage *src, const BaseImage *dst)
+{
+    return src->width == dst->height && src->height == dst->width;
+}
+
 }
 
 extern "C" BaseStatus plt_rga_blit(const BaseImage *src, const BaseRect *src_rect, BaseImage *dst, const BaseRect *dst_rect)
@@ -487,6 +505,126 @@ extern "C" BaseStatus plt_rga_boxes(BaseImage *dst, const BaseRect *boxes, int c
             fprintf(stderr, "[plt.rga] box failed %d\n", (int)status);
             return BASE_ERR;
         }
+    }
+    return BASE_OK;
+}
+
+extern "C" BaseStatus plt_rga_rotate(const BaseImage *src, BaseImage *dst, int angle)
+{
+    if (!PairOk(src, dst))
+    {
+        return BASE_ERR;
+    }
+    int mode = 0;
+    if (angle == PLT_ROTATE_90 || angle == PLT_ROTATE_270)
+    {
+        mode = angle == PLT_ROTATE_90 ? IM_HAL_TRANSFORM_ROT_90 : IM_HAL_TRANSFORM_ROT_270;
+        if (!SwappedSize(src, dst))
+        {
+            return BASE_ERR;
+        }
+    }
+    else if (angle == PLT_ROTATE_180)
+    {
+        mode = IM_HAL_TRANSFORM_ROT_180;
+        if (!SameSize(src, dst))
+        {
+            return BASE_ERR;
+        }
+    }
+    else
+    {
+        return BASE_ERR;
+    }
+    RgaImage src_image;
+    RgaImage dst_image;
+    if (Import(src, &src_image) != BASE_OK || Import(dst, &dst_image) != BASE_OK)
+    {
+        fprintf(stderr, "[plt.rga] import buffer failed\n");
+        return BASE_ERR;
+    }
+    const IM_STATUS status = imrotate_t(src_image.buf, dst_image.buf, mode, 1);
+    if (!RgaOk(status))
+    {
+        fprintf(stderr, "[plt.rga] rotate failed %d\n", (int)status);
+        return BASE_ERR;
+    }
+    return BASE_OK;
+}
+
+extern "C" BaseStatus plt_rga_flip(const BaseImage *src, BaseImage *dst, int direction)
+{
+    if (!PairOk(src, dst) || !SameSize(src, dst))
+    {
+        return BASE_ERR;
+    }
+    int mode = 0;
+    if (direction == PLT_FLIP_HORIZONTAL)
+    {
+        mode = IM_HAL_TRANSFORM_FLIP_H;
+    }
+    else if (direction == PLT_FLIP_VERTICAL)
+    {
+        mode = IM_HAL_TRANSFORM_FLIP_V;
+    }
+    else
+    {
+        return BASE_ERR;
+    }
+    RgaImage src_image;
+    RgaImage dst_image;
+    if (Import(src, &src_image) != BASE_OK || Import(dst, &dst_image) != BASE_OK)
+    {
+        fprintf(stderr, "[plt.rga] import buffer failed\n");
+        return BASE_ERR;
+    }
+    const IM_STATUS status = imflip_t(src_image.buf, dst_image.buf, mode, 1);
+    if (!RgaOk(status))
+    {
+        fprintf(stderr, "[plt.rga] flip failed %d\n", (int)status);
+        return BASE_ERR;
+    }
+    return BASE_OK;
+}
+
+extern "C" BaseStatus plt_rga_translate(const BaseImage *src, BaseImage *dst, int x, int y)
+{
+    if (!PairOk(src, dst) || !SameSize(src, dst) || x < 0 || y < 0)
+    {
+        return BASE_ERR;
+    }
+    if (IsYuv(src->format))
+    {
+        x &= ~1;
+        y &= ~1;
+    }
+    else
+    {
+        if (x == 1)
+        {
+            x = 2;
+        }
+        if (y == 1)
+        {
+            y = 2;
+        }
+    }
+    if (x >= src->width || y >= src->height || src->width - x < 2 || src->height - y < 2)
+    {
+        return BASE_OK;
+    }
+    RgaImage src_image;
+    RgaImage dst_image;
+    if (Import(src, &src_image) != BASE_OK || Import(dst, &dst_image) != BASE_OK)
+    {
+        fprintf(stderr, "[plt.rga] import buffer failed\n");
+        return BASE_ERR;
+    }
+    const IM_STATUS status = imtranslate_t(src_image.buf, dst_image.buf, x, y, 1);
+    if (!RgaOk(status))
+    {
+        fprintf(stderr, "[plt.rga] translate failed %d\n", (int)status);
+        return BASE_ERR;
     }
     return BASE_OK;
 }

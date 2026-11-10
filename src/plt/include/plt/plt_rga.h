@@ -1,6 +1,6 @@
 /**
  * @file    plt_rga.h
- * @brief   裁剪、缩放、格式转换和画框。调用返回时硬件已经做完。
+ * @brief   裁剪、缩放、格式转换、画框、旋转、翻转和平移。调用返回时硬件已经做完。
  */
 #ifndef PLT_RGA_H
 #define PLT_RGA_H
@@ -35,6 +35,43 @@ BaseStatus plt_rga_boxes(BaseImage *dst,
                        int count,
                        uint32_t rgb,
                        int thickness);
+
+typedef enum
+{
+    /* 顺时针。 */
+    PLT_ROTATE_90 = 90,
+    PLT_ROTATE_180 = 180,
+    PLT_ROTATE_270 = 270
+}
+PltRotate;
+
+typedef enum
+{
+    /* 左右对调。 */
+    PLT_FLIP_HORIZONTAL = 0,
+    /* 上下对调。 */
+    PLT_FLIP_VERTICAL = 1
+}
+PltFlip;
+
+/*
+ * 同步。整幅旋转。90 和 270 时 dst 的宽高是 src 对调，180 时宽高相同。
+ * 格式必须相同，源和目标不能是同一块缓冲。角度不是这三档时返回 BASE_ERR。
+ */
+BaseStatus plt_rga_rotate(const BaseImage *src, BaseImage *dst, int angle);
+
+/*
+ * 同步。整幅翻转。格式和宽高必须相同，源和目标不能是同一块缓冲。
+ * direction 取 PLT_FLIP_HORIZONTAL 或 PLT_FLIP_VERTICAL。
+ */
+BaseStatus plt_rga_flip(const BaseImage *src, BaseImage *dst, int direction);
+
+/*
+ * 同步。把 src 平移到 dst 的 (x, y)，空出的边保持 dst 原样。
+ * 宽高和格式必须相同，源和目标不能是同一块缓冲。
+ * x 或 y 为负返回 BASE_ERR。起点为 1 时挪到 2。移完不足 2 像素时什么都不画，返回 BASE_OK。
+ */
+BaseStatus plt_rga_translate(const BaseImage *src, BaseImage *dst, int x, int y);
 
 #ifdef __cplusplus
 }

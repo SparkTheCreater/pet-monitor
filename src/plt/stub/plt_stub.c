@@ -113,6 +113,31 @@ BaseStatus plt_rga_boxes(BaseImage *dst, const BaseRect *boxes, int count, uint3
     return BASE_ERR;
 }
 
+BaseStatus plt_rga_rotate(const BaseImage *src, BaseImage *dst, int angle)
+{
+    (void)src;
+    (void)dst;
+    (void)angle;
+    return BASE_ERR;
+}
+
+BaseStatus plt_rga_flip(const BaseImage *src, BaseImage *dst, int direction)
+{
+    (void)src;
+    (void)dst;
+    (void)direction;
+    return BASE_ERR;
+}
+
+BaseStatus plt_rga_translate(const BaseImage *src, BaseImage *dst, int x, int y)
+{
+    (void)src;
+    (void)dst;
+    (void)x;
+    (void)y;
+    return BASE_ERR;
+}
+
 BaseStatus plt_jpeg_encode(const BaseImage *image, int quality, uint8_t **jpeg, size_t *jpeg_len)
 {
     (void)image;

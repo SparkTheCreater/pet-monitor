@@ -1,6 +1,6 @@
 /**
  * @file    media_pic.c
- * @brief   缩放、拷贝、转色、画线和画框。都交给平台层，返回时硬件已经做完。
+ * @brief   缩放、拷贝、转色、画线、画框、旋转、翻转和平移。都交给平台层，返回时硬件已经做完。
  */
 #include "media_pic.h"
 
@@ -46,4 +46,19 @@ BaseStatus media_pic_line(BaseImage *dst, int x, int y, int length, int thicknes
 BaseStatus media_pic_box(BaseImage *dst, const BaseRect *boxes, int count, uint32_t rgb, int thickness)
 {
     return plt_rga_boxes(dst, boxes, count, rgb, thickness);
+}
+
+BaseStatus media_pic_rotate(const BaseImage *src, BaseImage *dst, int angle)
+{
+    return plt_rga_rotate(src, dst, angle);
+}
+
+BaseStatus media_pic_flip(const BaseImage *src, BaseImage *dst, int direction)
+{
+    return plt_rga_flip(src, dst, direction);
+}
+
+BaseStatus media_pic_translate(const BaseImage *src, BaseImage *dst, int x, int y)
+{
+    return plt_rga_translate(src, dst, x, y);
 }

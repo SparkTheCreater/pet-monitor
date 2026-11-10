@@ -27,4 +27,6 @@
 
 ## 应用层
 
-应用层目前只放发信。目录是 `src/app`，库名是 `app`。头文件在 `src/app/include`，接口是 `app_email_send`。实现用 C++11，依赖 OpenSSL。
+应用层目前只放发信。目录是 `src/app`，库名是 `app`。头文件在 `src/app/include`，接口是 `app_email_send`。实现用 C++11。
+
+发信依赖 OpenSSL（`libssl` 和 `libcrypto`）。嵌入式设备上的库路径和链接关系需要自行配置。本工程使用 `find_package(OpenSSL)` 去链接系统里的 OpenSSL。

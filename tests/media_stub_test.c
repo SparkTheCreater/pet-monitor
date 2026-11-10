@@ -63,12 +63,19 @@ int main(void)
     param.qp_init = 26;
     param.qp_min = 10;
     param.qp_max = 51;
-    param.profile = 100;
+    param.profile = 0;
     param.level = 40;
+    Expect(media_enc_open(&param, &enc) == BASE_ERR, "encoder profile");
+    Expect(enc == NULL, "encoder profile cleared");
+    param.profile = 100;
     status = media_enc_open(&param, &enc);
     Expect(status == BASE_UNSUPPORTED, "encoder unsupported");
     Expect(enc == NULL, "encoder still empty");
     media_enc_close(NULL);
     Expect(media_enc_send(NULL, NULL, 0) == BASE_ERR, "encoder send");
+    Expect(media_enc_receive(NULL, NULL) == BASE_ERR, "encoder receive");
+    media_enc_packet_free(NULL);
+    Expect(media_enc_request_keyframe(NULL) == BASE_ERR, "encoder key");
+    Expect(media_enc_set_bitrate(NULL, 1000000) == BASE_ERR, "encoder bitrate");
     return g_failed ? 1 : 0;
 }

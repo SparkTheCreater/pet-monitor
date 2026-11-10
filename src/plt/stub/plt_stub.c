@@ -4,6 +4,7 @@
  */
 #include "plt/plt_jpeg.h"
 #include "plt/plt_mem.h"
+#include "plt/plt_venc.h"
 #include "plt/plt_npu.h"
 #include "plt/plt_rga.h"
 #include "plt/plt_sys.h"
@@ -217,5 +218,101 @@ BaseStatus plt_npu_run(PltNpu *npu, const BaseImage *input, void *const *outputs
     (void)input;
     (void)outputs;
     (void)bytes;
+    return BASE_ERR;
+}
+
+static int VencParamOk(const PltVencParam *param)
+{
+    if (param->codec != BASE_CODEC_H264 && param->codec != BASE_CODEC_H265)
+    {
+        return 0;
+    }
+    if (param->format != BASE_PIX_NV12 && param->format != BASE_PIX_RGB888)
+    {
+        return 0;
+    }
+    if (param->width <= 0 || param->height <= 0 || param->fps <= 0 || param->gop <= 0 || param->bitrate <= 0)
+    {
+        return 0;
+    }
+    if (param->rc_mode != PLT_RC_CBR && param->rc_mode != PLT_RC_VBR)
+    {
+        return 0;
+    }
+    if (param->qp_min < 0 || param->qp_max > 51 || param->qp_min > param->qp_init || param->qp_init > param->qp_max)
+    {
+        return 0;
+    }
+    if (param->codec == BASE_CODEC_H264 &&
+        (param->profile != 66 && param->profile != 77 && param->profile != 100))
+    {
+        return 0;
+    }
+    if (param->codec == BASE_CODEC_H264 && (param->level < 10 || param->level > 52))
+    {
+        return 0;
+    }
+    return 1;
+}
+
+BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
+{
+    if (out != NULL)
+    {
+        *out = NULL;
+    }
+    if (param == NULL || out == NULL || !VencParamOk(param))
+    {
+        return BASE_ERR;
+    }
+    return BASE_UNSUPPORTED;
+}
+
+void plt_venc_close(PltVenc *enc)
+{
+    (void)enc;
+}
+
+BaseStatus plt_venc_send(PltVenc *enc, const BaseImage *image, int64_t pts_us)
+{
+    (void)enc;
+    (void)image;
+    (void)pts_us;
+    return BASE_ERR;
+}
+
+BaseStatus plt_venc_get(PltVenc *enc, PltVencPacket *packet)
+{
+    (void)enc;
+    if (packet != NULL)
+    {
+        memset(packet, 0, sizeof(*packet));
+    }
+    return BASE_ERR;
+}
+
+void plt_venc_get_done(PltVenc *enc)
+{
+    (void)enc;
+}
+
+BaseStatus plt_venc_request_idr(PltVenc *enc)
+{
+    (void)enc;
+    return BASE_ERR;
+}
+
+BaseStatus plt_venc_set_bitrate(PltVenc *enc, int bitrate)
+{
+    (void)enc;
+    (void)bitrate;
+    return BASE_ERR;
+}
+
+BaseStatus plt_venc_set_roi(PltVenc *enc, const PltVencRoi *regions, int count)
+{
+    (void)enc;
+    (void)regions;
+    (void)count;
     return BASE_ERR;
 }

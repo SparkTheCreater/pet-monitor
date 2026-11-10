@@ -1,8 +1,18 @@
 /**
  * @file    media_enc.c
- * @brief   视频编码接口。平台层还没有视频编码器，打开时明确返回不支持。
+ * @brief   视频编码。参数检查在这里，编码交给平台层。
  */
 #include "media_enc.h"
+
+#include "plt/plt_venc.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+struct MediaEnc
+{
+    PltVenc *enc;
+};
 
 static int ParamOk(const MediaEncParam *param)
 {
@@ -26,15 +36,42 @@ static int ParamOk(const MediaEncParam *param)
     {
         return 0;
     }
-    if (param->codec == BASE_CODEC_H264 && (param->profile < 0 || param->level <= 0))
+    if (param->codec == BASE_CODEC_H264 &&
+        (param->profile != 66 && param->profile != 77 && param->profile != 100))
+    {
+        return 0;
+    }
+    if (param->codec == BASE_CODEC_H264 && (param->level < 10 || param->level > 52))
     {
         return 0;
     }
     return 1;
 }
 
+static void FillParam(const MediaEncParam *param, PltVencParam *out)
+{
+    memset(out, 0, sizeof(*out));
+    out->codec = param->codec;
+    out->format = param->format;
+    out->width = param->width;
+    out->height = param->height;
+    out->fps = param->fps;
+    out->gop = param->gop;
+    out->rc_mode = param->rc_mode;
+    out->bitrate = param->bitrate;
+    out->qp_init = param->qp_init;
+    out->qp_min = param->qp_min;
+    out->qp_max = param->qp_max;
+    out->profile = param->profile;
+    out->level = param->level;
+}
+
 BaseStatus media_enc_open(const MediaEncParam *param, MediaEnc **out)
 {
+    PltVencParam plt_param;
+    PltVenc *venc = NULL;
+    MediaEnc *enc;
+    BaseStatus status;
     if (out != NULL)
     {
         *out = NULL;
@@ -43,25 +80,47 @@ BaseStatus media_enc_open(const MediaEncParam *param, MediaEnc **out)
     {
         return BASE_ERR;
     }
-    return BASE_UNSUPPORTED;
+    FillParam(param, &plt_param);
+    status = plt_venc_open(&plt_param, &venc);
+    if (status != BASE_OK)
+    {
+        return status;
+    }
+    enc = (MediaEnc *)calloc(1, sizeof(*enc));
+    if (enc == NULL)
+    {
+        plt_venc_close(venc);
+        return BASE_ERR;
+    }
+    enc->enc = venc;
+    *out = enc;
+    return BASE_OK;
 }
 
-void media_enc_close(MediaEnc *encoder)
+void media_enc_close(MediaEnc *enc)
 {
-    (void)encoder;
+    if (enc == NULL)
+    {
+        return;
+    }
+    plt_venc_close(enc->enc);
+    free(enc);
 }
 
-BaseStatus media_enc_send(MediaEnc *encoder, const BaseImage *image, int64_t pts_us)
+BaseStatus media_enc_send(MediaEnc *enc, const BaseImage *image, int64_t pts_us)
 {
-    (void)encoder;
-    (void)image;
-    (void)pts_us;
-    return BASE_ERR;
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    return plt_venc_send(enc->enc, image, pts_us);
 }
 
-BaseStatus media_enc_receive(MediaEnc *encoder, MediaEncPacket *packet)
+BaseStatus media_enc_receive(MediaEnc *enc, MediaEncPacket *packet)
 {
-    (void)encoder;
+    PltVencPacket view;
+    uint8_t *data;
+    BaseStatus status;
     if (packet != NULL)
     {
         packet->data = NULL;
@@ -69,31 +128,85 @@ BaseStatus media_enc_receive(MediaEnc *encoder, MediaEncPacket *packet)
         packet->pts_us = 0;
         packet->key = 0;
     }
-    return BASE_ERR;
+    if (enc == NULL || packet == NULL)
+    {
+        return BASE_ERR;
+    }
+    status = plt_venc_get(enc->enc, &view);
+    if (status != BASE_OK)
+    {
+        return status;
+    }
+    data = (uint8_t *)malloc(view.size > 0 ? view.size : 1);
+    if (data == NULL)
+    {
+        return BASE_ERR;
+    }
+    if (view.size > 0)
+    {
+        memcpy(data, view.data, view.size);
+    }
+    plt_venc_get_done(enc->enc);
+    packet->data = data;
+    packet->size = view.size;
+    packet->pts_us = view.pts_us;
+    packet->key = view.key;
+    return BASE_OK;
 }
 
 void media_enc_packet_free(MediaEncPacket *packet)
 {
-    (void)packet;
+    if (packet == NULL)
+    {
+        return;
+    }
+    free(packet->data);
+    packet->data = NULL;
+    packet->size = 0;
+    packet->pts_us = 0;
+    packet->key = 0;
 }
 
-BaseStatus media_enc_request_keyframe(MediaEnc *encoder)
+BaseStatus media_enc_request_keyframe(MediaEnc *enc)
 {
-    (void)encoder;
-    return BASE_ERR;
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    return plt_venc_request_idr(enc->enc);
 }
 
-BaseStatus media_enc_set_bitrate(MediaEnc *encoder, int bitrate)
+BaseStatus media_enc_set_bitrate(MediaEnc *enc, int bitrate)
 {
-    (void)encoder;
-    (void)bitrate;
-    return BASE_ERR;
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    return plt_venc_set_bitrate(enc->enc, bitrate);
 }
 
-BaseStatus media_enc_set_roi(MediaEnc *encoder, const MediaEncRoi *regions, int count)
+BaseStatus media_enc_set_roi(MediaEnc *enc, const MediaEncRoi *regions, int count)
 {
-    (void)encoder;
-    (void)regions;
-    (void)count;
-    return BASE_ERR;
+    PltVencRoi local[8];
+    const PltVencRoi *passed = NULL;
+    int i;
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    if (count > 0 && count <= 8 && regions != NULL)
+    {
+        for (i = 0; i < count; i++)
+        {
+            local[i].x = regions[i].x;
+            local[i].y = regions[i].y;
+            local[i].w = regions[i].w;
+            local[i].h = regions[i].h;
+            local[i].abs_qp = regions[i].abs_qp;
+            local[i].qp = regions[i].qp;
+            local[i].intra = regions[i].intra;
+        }
+        passed = local;
+    }
+    return plt_venc_set_roi(enc->enc, passed, count);
 }

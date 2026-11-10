@@ -33,6 +33,7 @@ if(PM_PLATFORM STREQUAL "rk3588")
         src/plt/rk3588/plt_vdec.cpp
         src/plt/rk3588/plt_rga.cpp
         src/plt/rk3588/plt_jpeg.cpp
+        src/plt/rk3588/plt_venc.cpp
         src/plt/rk3588/plt_npu.cpp
     )
     target_compile_definitions(plt PRIVATE RK_3588)

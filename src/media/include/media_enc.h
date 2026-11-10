@@ -51,8 +51,8 @@ typedef struct MediaEncPacket
 MediaEncPacket;
 
 /*
- * 同步。参数不合法返回 BASE_ERR。
- * 平台层还没有视频编码器，参数合法时返回 BASE_UNSUPPORTED，*out 为空。
+ * 同步。参数不合法返回 BASE_ERR，*out 为空。
+ * 这颗平台没有视频编码器时返回 BASE_UNSUPPORTED，*out 为空。
  * JPEG 用 media_jpeg_encode。
  */
 BaseStatus media_enc_open(const MediaEncParam *param, MediaEnc **out);
@@ -95,7 +95,7 @@ MediaEncRoi;
 /*
  * 设置下一帧起的感兴趣区域。最多 8 块，count 为 0 时清掉。
  * 和 send 由调用方串行调用。不合法时保持原配置。
- * 平台层还没有视频编码器时返回 BASE_ERR。
+ * 编码器没打开时返回 BASE_ERR。
  */
 BaseStatus media_enc_set_roi(MediaEnc *enc, const MediaEncRoi *regions, int count);
 

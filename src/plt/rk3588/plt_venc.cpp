@@ -51,6 +51,7 @@ struct PltVenc
     int codec;
     int rc_mode;
     bool mismatch_logged;
+    std::vector<uint8_t> extradata;
     std::deque<EncPacket> queue;
     EncPacket held;
     int held_valid;
@@ -436,16 +437,49 @@ extern "C" BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
     }
 #endif
 
-    /* 先让编码器写出参数集。关键帧模式会把它附在每个 IDR 上。 */
+    /* 单独取出参数集。关键帧模式仍会把它附在每个 IDR 上。 */
     packet = nullptr;
     if (mpp_packet_init_with_buffer(&packet, enc->packet_buf) == MPP_OK)
     {
+        void *pos;
+        size_t len;
         mpp_packet_set_length(packet, 0);
-        enc->mpi->control(enc->ctx, MPP_ENC_GET_HDR_SYNC, packet);
+        if (enc->mpi->control(enc->ctx, MPP_ENC_GET_HDR_SYNC, packet) == MPP_OK)
+        {
+            pos = mpp_packet_get_pos(packet);
+            len = mpp_packet_get_length(packet);
+            if (pos != nullptr && len > 0)
+            {
+                enc->extradata.assign((uint8_t *)pos, (uint8_t *)pos + len);
+            }
+        }
+        else
+        {
+            fprintf(stderr, "[plt.venc] header sync failed\n");
+        }
         mpp_packet_deinit(&packet);
     }
 
     *out = enc;
+    return BASE_OK;
+}
+
+extern "C" BaseStatus plt_venc_extradata(PltVenc *enc, const uint8_t **data, size_t *size)
+{
+    if (data != nullptr)
+    {
+        *data = nullptr;
+    }
+    if (size != nullptr)
+    {
+        *size = 0;
+    }
+    if (enc == nullptr || data == nullptr || size == nullptr || enc->extradata.empty())
+    {
+        return BASE_ERR;
+    }
+    *data = enc->extradata.data();
+    *size = enc->extradata.size();
     return BASE_OK;
 }
 

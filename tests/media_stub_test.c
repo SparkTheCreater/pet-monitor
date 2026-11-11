@@ -85,6 +85,10 @@ int main(void)
     Expect(media_enc_receive(NULL, NULL) == BASE_ERR, "encoder receive");
     media_enc_packet_free(NULL);
     Expect(media_enc_request_keyframe(NULL) == BASE_ERR, "encoder key");
+    const uint8_t *extra = (const uint8_t *)1;
+    size_t extra_size = 1;
+    Expect(media_enc_extradata(NULL, &extra, &extra_size) == BASE_ERR, "encoder extradata");
+    Expect(extra == NULL && extra_size == 0, "encoder extradata cleared");
     Expect(media_enc_set_bitrate(NULL, 1000000) == BASE_ERR, "encoder bitrate");
     return g_failed ? 1 : 0;
 }

@@ -107,6 +107,23 @@ void media_enc_close(MediaEnc *enc)
     free(enc);
 }
 
+BaseStatus media_enc_extradata(MediaEnc *enc, const uint8_t **data, size_t *size)
+{
+    if (data != NULL)
+    {
+        *data = NULL;
+    }
+    if (size != NULL)
+    {
+        *size = 0;
+    }
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    return plt_venc_extradata(enc->enc, data, size);
+}
+
 BaseStatus media_enc_send(MediaEnc *enc, const BaseImage *image, int64_t pts_us)
 {
     if (enc == NULL)

@@ -72,8 +72,14 @@ PltVencRoi;
  */
 BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out);
 
-/* 停掉编码器并释放内部码流。之后 get 拿到的指针都失效。 */
+/* 停掉编码器并释放内部码流。之后 get 和 extradata 拿到的指针都失效。 */
 void plt_venc_close(PltVenc *enc);
+
+/*
+ * 取 SPS/PPS，H.265 还带 VPS。封装时写进流信息。
+ * data 指向编码器内部缓存，close 之前一直有效。还没生成时返回 BASE_ERR。
+ */
+BaseStatus plt_venc_extradata(PltVenc *enc, const uint8_t **data, size_t *size);
 
 /*
  * 同步。格式、宽高和行宽要和 open 时一致。

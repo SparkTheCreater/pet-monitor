@@ -59,6 +59,12 @@ BaseStatus media_enc_open(const MediaEncParam *param, MediaEnc **out);
 
 void media_enc_close(MediaEnc *enc);
 
+/*
+ * 取 SPS/PPS，H.265 还带 VPS。data 指向编码器内部缓存，close 之前一直有效。
+ * 还没生成或编码器没打开时返回 BASE_ERR，*data 为空。
+ */
+BaseStatus media_enc_extradata(MediaEnc *enc, const uint8_t **data, size_t *size);
+
 /* 同步。格式、宽高、行宽要和 open 时一致。返回时这一帧的码流已经取出。 */
 BaseStatus media_enc_send(MediaEnc *enc, const BaseImage *image, int64_t pts_us);
 

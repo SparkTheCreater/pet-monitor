@@ -289,6 +289,20 @@ void plt_venc_close(PltVenc *enc)
     (void)enc;
 }
 
+BaseStatus plt_venc_extradata(PltVenc *enc, const uint8_t **data, size_t *size)
+{
+    (void)enc;
+    if (data != NULL)
+    {
+        *data = NULL;
+    }
+    if (size != NULL)
+    {
+        *size = 0;
+    }
+    return BASE_ERR;
+}
+
 BaseStatus plt_venc_send(PltVenc *enc, const BaseImage *image, int64_t pts_us)
 {
     (void)enc;

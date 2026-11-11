@@ -159,6 +159,14 @@ void plt_jpeg_free(uint8_t *jpeg)
     (void)jpeg;
 }
 
+BaseStatus plt_jpeg_decode(const uint8_t *data, size_t size, BaseImage *image)
+{
+    (void)data;
+    (void)size;
+    ClearImage(image);
+    return BASE_ERR;
+}
+
 BaseStatus plt_npu_open(const char *model_path, PltNpu **out)
 {
     (void)model_path;

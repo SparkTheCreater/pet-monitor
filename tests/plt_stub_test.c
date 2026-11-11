@@ -10,6 +10,7 @@
 #include "plt/plt_vdec.h"
 
 #include <stdio.h>
+#include <string.h>
 
 static int g_failed = 0;
 
@@ -66,6 +67,17 @@ int main(void)
         g_failed = 1;
     }
     plt_jpeg_free(NULL);
+
+    memset(&image, 0, sizeof(image));
+    image.handle = (void *)1;
+    image.fd = 3;
+    ExpectErr(plt_jpeg_decode(NULL, 0, &image), "plt_jpeg_decode");
+    if (image.handle != NULL || image.fd != -1)
+    {
+        fprintf(stderr, "jpeg decode left an image\n");
+        g_failed = 1;
+    }
+    ExpectErr(plt_jpeg_decode(NULL, 0, NULL), "plt_jpeg_decode null");
 
     PltNpu *npu = (PltNpu *)1;
     ExpectErr(plt_npu_open("model.rknn", &npu), "plt_npu_open");

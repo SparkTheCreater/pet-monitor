@@ -1,6 +1,6 @@
 /**
  * @file    plt_jpeg.cpp
- * @brief   把一帧 NV12 同步编成 JPEG。有限范围先换成全范围。
+ * @brief   整张 JPEG。解码走 mpi_dec_test 的任务模式，编码把有限范围先换成全范围。
  */
 #include "plt/plt_jpeg.h"
 #include "plt/plt_mem.h"
@@ -13,6 +13,7 @@
 #include "mpp_meta.h"
 #include "mpp_packet.h"
 #include "rk_mpi.h"
+#include "rk_vdec_cfg.h"
 #include "rk_venc_cfg.h"
 #include "rk_venc_rc.h"
 
@@ -22,6 +23,243 @@
 
 namespace
 {
+
+/* 坏图可能不出帧。等太久就当失败，避免卡住调用方。上限见 MPP_POLL_MAX。 */
+const int kOutputWaitMs = 1000;
+
+/* 宽高在 SOF 里。渐进式也是 SOF，交给解码器拒绝。 */
+int JpegSize(const uint8_t *data, size_t size, int *width, int *height)
+{
+    size_t pos;
+    if (data == nullptr || size < 4 || data[0] != 0xff || data[1] != 0xd8)
+    {
+        return 0;
+    }
+    pos = 2;
+    while (pos + 4 <= size)
+    {
+        int marker;
+        int segment;
+        int sof;
+        if (data[pos] != 0xff)
+        {
+            return 0;
+        }
+        marker = data[pos + 1];
+        if (marker == 0xff)
+        {
+            pos++;
+            continue;
+        }
+        segment = (data[pos + 2] << 8) | data[pos + 3];
+        sof = marker >= 0xc0 && marker <= 0xcf && marker != 0xc4 && marker != 0xc8 && marker != 0xcc;
+        if (sof)
+        {
+            if (pos + 9 > size)
+            {
+                return 0;
+            }
+            *height = (data[pos + 5] << 8) | data[pos + 6];
+            *width = (data[pos + 7] << 8) | data[pos + 8];
+            return *width > 0 && *height > 0;
+        }
+        if (segment < 2)
+        {
+            return 0;
+        }
+        pos += 2 + (size_t)segment;
+    }
+    return 0;
+}
+
+struct Decoder
+{
+    MppCtx ctx;
+    MppApi *mpi;
+    MppDecCfg cfg;
+    MppBufferGroup group;
+    MppBuffer stream;
+    MppPacket packet;
+    MppFrame frame;
+
+    Decoder()
+        : ctx(nullptr)
+        , mpi(nullptr)
+        , cfg(nullptr)
+        , group(nullptr)
+        , stream(nullptr)
+        , packet(nullptr)
+        , frame(nullptr)
+    {
+    }
+
+    ~Decoder()
+    {
+        /* 先停解码器，它手里的包和帧引用放掉后，再拆缓冲。 */
+        if (ctx != nullptr)
+        {
+            if (mpi != nullptr)
+            {
+                mpi->reset(ctx);
+            }
+            mpp_destroy(ctx);
+        }
+        if (frame != nullptr)
+        {
+            mpp_frame_deinit(&frame);
+        }
+        if (packet != nullptr)
+        {
+            mpp_packet_deinit(&packet);
+        }
+        if (stream != nullptr)
+        {
+            mpp_buffer_put(stream);
+        }
+        if (group != nullptr)
+        {
+            mpp_buffer_group_put(group);
+        }
+        if (cfg != nullptr)
+        {
+            mpp_dec_cfg_deinit(cfg);
+        }
+    }
+};
+
+/*
+ * jpegd 直接让硬件读包里的 buffer，码流要放进和图像一样的设备缓冲。
+ * 硬件按 16 字节对齐读，尾部留一段零。
+ */
+BaseStatus LoadStream(Decoder *dec, const uint8_t *data, size_t size)
+{
+    const size_t bytes = size + 256;
+    int type = plt_rk_dma_type();
+    uint8_t *ptr;
+    BaseImage view;
+    if (type == 0)
+    {
+        type = MPP_BUFFER_TYPE_DRM;
+    }
+    if (mpp_buffer_group_get_internal(&dec->group, (MppBufferType)type) != MPP_OK ||
+        mpp_buffer_get(dec->group, &dec->stream, bytes) != MPP_OK)
+    {
+        fprintf(stderr, "[plt.jpeg] stream buffer failed\n");
+        return BASE_ERR;
+    }
+    ptr = (uint8_t *)mpp_buffer_get_ptr(dec->stream);
+    if (ptr == nullptr)
+    {
+        return BASE_ERR;
+    }
+    memcpy(ptr, data, size);
+    memset(ptr + size, 0, 256);
+    memset(&view, 0, sizeof(view));
+    view.fd = mpp_buffer_get_fd(dec->stream);
+    view.handle = dec->stream;
+    if (plt_mem_flush(&view) != BASE_OK || mpp_packet_init_with_buffer(&dec->packet, dec->stream) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    mpp_packet_set_size(dec->packet, size);
+    mpp_packet_set_length(dec->packet, size);
+    mpp_packet_set_eos(dec->packet);
+    return BASE_OK;
+}
+
+BaseStatus OpenDecoder(Decoder *dec)
+{
+    MppFrameFormat fmt;
+    if (mpp_create(&dec->ctx, &dec->mpi) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    if (mpp_init(dec->ctx, MPP_CTX_DEC, MPP_VIDEO_CodingMJPEG) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    if (mpp_dec_cfg_init(&dec->cfg) != MPP_OK ||
+        dec->mpi->control(dec->ctx, MPP_DEC_GET_CFG, dec->cfg) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    /* 送进来的就是一整张图，不要再切帧。 */
+    mpp_dec_cfg_set_u32(dec->cfg, "base:split_parse", 0);
+    if (dec->mpi->control(dec->ctx, MPP_DEC_SET_CFG, dec->cfg) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    /* 4:2:2、4:4:4 由解码器转成 NV12。mpi_dec_test 在解 JPEG 前设置输出格式。 */
+    fmt = MPP_FMT_YUV420SP;
+    if (dec->mpi->control(dec->ctx, MPP_DEC_SET_OUTPUT_FORMAT, &fmt) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    return BASE_OK;
+}
+
+/*
+ * JPEG 走任务模式：输入任务同时带码流和输出帧，回来时像素已经写进 image。
+ * 再把输入任务收回，包才能释放。
+ */
+BaseStatus RunDecode(Decoder *dec, BaseImage *image)
+{
+    MppTask task = nullptr;
+    MppFrame done = nullptr;
+    RK_U32 fmt;
+    if (mpp_frame_init(&dec->frame) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    mpp_frame_set_buffer(dec->frame, (MppBuffer)image->handle);
+    if (dec->mpi->poll(dec->ctx, MPP_PORT_INPUT, MPP_POLL_BLOCK) != MPP_OK ||
+        dec->mpi->dequeue(dec->ctx, MPP_PORT_INPUT, &task) != MPP_OK || task == nullptr)
+    {
+        return BASE_ERR;
+    }
+    mpp_task_meta_set_packet(task, KEY_INPUT_PACKET, dec->packet);
+    mpp_task_meta_set_frame(task, KEY_OUTPUT_FRAME, dec->frame);
+    if (dec->mpi->enqueue(dec->ctx, MPP_PORT_INPUT, task) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+
+    task = nullptr;
+    if (dec->mpi->poll(dec->ctx, MPP_PORT_OUTPUT, (MppPollType)kOutputWaitMs) != MPP_OK ||
+        dec->mpi->dequeue(dec->ctx, MPP_PORT_OUTPUT, &task) != MPP_OK || task == nullptr)
+    {
+        fprintf(stderr, "[plt.jpeg] no output frame\n");
+        return BASE_ERR;
+    }
+    mpp_task_meta_get_frame(task, KEY_OUTPUT_FRAME, &done);
+    if (dec->mpi->enqueue(dec->ctx, MPP_PORT_OUTPUT, task) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    task = nullptr;
+    if (dec->mpi->dequeue(dec->ctx, MPP_PORT_INPUT, &task) == MPP_OK && task != nullptr)
+    {
+        dec->mpi->enqueue(dec->ctx, MPP_PORT_INPUT, task);
+    }
+
+    if (done == nullptr || mpp_frame_get_errinfo(done) || mpp_frame_get_discard(done))
+    {
+        fprintf(stderr, "[plt.jpeg] decode error\n");
+        return BASE_ERR;
+    }
+    /* 灰度图硬件不转成 NV12，按 NV12 读会花屏。 */
+    fmt = mpp_frame_get_fmt(done) & MPP_FRAME_FMT_MASK;
+    if (fmt != MPP_FMT_YUV420SP ||
+        (int)mpp_frame_get_hor_stride(done) != image->hor_stride ||
+        (int)mpp_frame_get_ver_stride(done) > image->ver_stride)
+    {
+        fprintf(stderr, "[plt.jpeg] unsupported output fmt=0x%x stride=%u\n",
+                fmt,
+                (unsigned)mpp_frame_get_hor_stride(done));
+        return BASE_ERR;
+    }
+    return BASE_OK;
+}
 
 struct Encoder
 {
@@ -261,6 +499,36 @@ extern "C" BaseStatus plt_jpeg_encode(const BaseImage *image, int quality, uint8
     const BaseStatus status = EncodeFull(&full, quality, jpeg, jpeg_len);
     plt_mem_free(&full);
     return status;
+}
+
+extern "C" BaseStatus plt_jpeg_decode(const uint8_t *data, size_t size, BaseImage *image)
+{
+    int width = 0;
+    int height = 0;
+    if (image != nullptr)
+    {
+        memset(image, 0, sizeof(*image));
+        image->fd = -1;
+    }
+    if (data == nullptr || size == 0 || image == nullptr || !plt_rk_ready() ||
+        !JpegSize(data, size, &width, &height))
+    {
+        return BASE_ERR;
+    }
+    if (plt_mem_alloc(width, height, BASE_PIX_NV12, image) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    image->range = BASE_RANGE_FULL;
+    Decoder dec;
+    if (LoadStream(&dec, data, size) != BASE_OK ||
+        OpenDecoder(&dec) != BASE_OK ||
+        RunDecode(&dec, image) != BASE_OK)
+    {
+        plt_mem_free(image);
+        return BASE_ERR;
+    }
+    return BASE_OK;
 }
 
 extern "C" void plt_jpeg_free(uint8_t *jpeg)

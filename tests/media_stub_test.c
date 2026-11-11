@@ -40,6 +40,14 @@ int main(void)
     Expect(jpeg == NULL && jpeg_len == 0, "jpeg encode cleared");
     media_jpeg_free(NULL);
 
+    BaseImage image;
+    memset(&image, 0, sizeof(image));
+    image.handle = (void *)1;
+    image.fd = 3;
+    Expect(media_jpeg_decode(NULL, 0, &image) == BASE_ERR, "jpeg decode");
+    Expect(image.handle == NULL && image.fd == -1, "jpeg decode cleared");
+    Expect(media_jpeg_decode(NULL, 0, NULL) == BASE_ERR, "jpeg decode null");
+
     Expect(media_pic_scale(NULL, NULL, NULL, NULL) == BASE_ERR, "scale");
     Expect(media_pic_line(NULL, 0, 0, 10, 2, 1, 0) == BASE_ERR, "line");
     Expect(media_pic_box(NULL, NULL, 0, 0, 2) == BASE_ERR, "box");

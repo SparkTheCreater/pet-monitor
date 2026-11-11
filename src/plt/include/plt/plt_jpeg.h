@@ -1,6 +1,6 @@
 /**
  * @file    plt_jpeg.h
- * @brief   把 NV12 编成 JPEG。返回时编码已经做完。
+ * @brief   整张 JPEG 的解码和编码。返回时硬件已经做完。
  */
 #ifndef PLT_JPEG_H
 #define PLT_JPEG_H
@@ -25,6 +25,14 @@ BaseStatus plt_jpeg_encode(const BaseImage *image,
 
 /* 释放 plt_jpeg_encode 交出来的缓冲。空指针直接返回。 */
 void plt_jpeg_free(uint8_t *jpeg);
+
+/*
+ * 同步。把一整张 baseline JPEG 解成 NV12，色彩范围是全范围。
+ * 宽高从 SOF 读出，缓冲按 16 对齐，和 plt_mem_alloc 相同。
+ * 成功时 *image 归调用方，用 plt_mem_free 释放。失败时 *image 无效，不用释放。
+ * 渐进式等芯片解不了的图返回 BASE_ERR。plt_init 之前失败。
+ */
+BaseStatus plt_jpeg_decode(const uint8_t *data, size_t size, BaseImage *image);
 
 #ifdef __cplusplus
 }

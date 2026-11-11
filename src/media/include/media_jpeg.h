@@ -1,6 +1,6 @@
 /**
  * @file    media_jpeg.h
- * @brief   把一帧编成 JPEG。返回时编码已经做完。
+ * @brief   整张 JPEG 的解码和编码。返回时硬件已经做完。
  */
 #ifndef MEDIA_JPEG_H
 #define MEDIA_JPEG_H
@@ -21,6 +21,13 @@ BaseStatus media_jpeg_encode(const BaseImage *image, int quality, uint8_t **jpeg
 
 /* 释放 media_jpeg_encode 交出来的缓冲。空指针直接返回。 */
 void media_jpeg_free(uint8_t *jpeg);
+
+/*
+ * 同步。把一整张 baseline JPEG 解成 NV12，色彩范围是全范围。
+ * 成功时 *image 由本层申请，调用方用 plt_mem_free 释放。失败时 *image 无效，不用释放。
+ * 渐进式等芯片解不了的图返回 BASE_ERR。
+ */
+BaseStatus media_jpeg_decode(const uint8_t *data, size_t size, BaseImage *image);
 
 #ifdef __cplusplus
 }

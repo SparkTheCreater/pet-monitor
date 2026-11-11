@@ -1,6 +1,6 @@
 /**
  * @file    media_jpeg.c
- * @brief   JPEG 编码交给平台层。这里不填质量默认值。
+ * @brief   JPEG 交给平台层。这里不填质量默认值。
  */
 #include "media_jpeg.h"
 
@@ -14,4 +14,9 @@ BaseStatus media_jpeg_encode(const BaseImage *image, int quality, uint8_t **jpeg
 void media_jpeg_free(uint8_t *jpeg)
 {
     plt_jpeg_free(jpeg);
+}
+
+BaseStatus media_jpeg_decode(const uint8_t *data, size_t size, BaseImage *image)
+{
+    return plt_jpeg_decode(data, size, image);
 }

@@ -68,6 +68,48 @@ void TensorHw(const rknn_tensor_attr *attr, int *width, int *height)
     *width = (int)attr->dims[2];
 }
 
+int TensorType(int type)
+{
+    switch (type)
+    {
+    case RKNN_TENSOR_FLOAT32:
+        return PLT_NPU_FLOAT32;
+    case RKNN_TENSOR_FLOAT16:
+        return PLT_NPU_FLOAT16;
+    case RKNN_TENSOR_INT8:
+        return PLT_NPU_INT8;
+    case RKNN_TENSOR_UINT8:
+        return PLT_NPU_UINT8;
+    case RKNN_TENSOR_INT16:
+        return PLT_NPU_INT16;
+    case RKNN_TENSOR_UINT16:
+        return PLT_NPU_UINT16;
+    case RKNN_TENSOR_INT32:
+        return PLT_NPU_INT32;
+    case RKNN_TENSOR_UINT32:
+        return PLT_NPU_UINT32;
+    case RKNN_TENSOR_INT64:
+        return PLT_NPU_INT64;
+    default:
+        return PLT_NPU_TYPE_UNKNOWN;
+    }
+}
+
+int QuantType(int type)
+{
+    switch (type)
+    {
+    case RKNN_TENSOR_QNT_NONE:
+        return PLT_NPU_QNT_NONE;
+    case RKNN_TENSOR_QNT_DFP:
+        return PLT_NPU_QNT_DFP;
+    case RKNN_TENSOR_QNT_AFFINE_ASYMMETRIC:
+        return PLT_NPU_QNT_AFFINE;
+    default:
+        return PLT_NPU_QNT_UNKNOWN;
+    }
+}
+
 void FillTensor(const rknn_tensor_attr *attr, PltNpuTensor *info)
 {
     memset(info, 0, sizeof(*info));
@@ -81,7 +123,10 @@ void FillTensor(const rknn_tensor_attr *attr, PltNpuTensor *info)
     {
         info->dims[i] = (int)attr->dims[i];
     }
-    info->type = (int)attr->type;
+    info->type = TensorType((int)attr->type);
+    info->qnt_type = QuantType((int)attr->qnt_type);
+    info->zp = (int)attr->zp;
+    info->scale = attr->scale;
     info->n_elems = attr->n_elems;
     info->bytes = attr->size;
 }

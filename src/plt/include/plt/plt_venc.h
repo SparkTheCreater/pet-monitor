@@ -103,15 +103,15 @@ BaseStatus plt_venc_request_idr(PltVenc *enc);
 BaseStatus plt_venc_set_bitrate(PltVenc *enc, int bitrate);
 
 /*
- * 下一帧起逆时针旋转，取值跟 MPP 的 prep:rotation 一致：0、90、180、270。
+ * 下一帧起逆时针旋转。angle 为 0、90、180、270。
  * 输入图的宽高不变。90 和 270 时码流宽高对调，参数集会重新生成。
  * 不合法时保持原配置。和 send 由调用方串行调用。
  */
 BaseStatus plt_venc_set_rotation(PltVenc *enc, int angle);
 
 /*
- * 下一帧起镜像，取值跟 MPP 的 prep:mirroring 一致。
- * 0 不镜像，1 水平镜像，2 垂直镜像。不合法时保持原配置。
+ * 下一帧起镜像。0 不镜像，1 水平镜像，2 垂直镜像。
+ * 不合法时保持原配置。
  */
 BaseStatus plt_venc_set_mirror(PltVenc *enc, int direction);
 

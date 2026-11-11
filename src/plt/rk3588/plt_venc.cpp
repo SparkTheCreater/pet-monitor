@@ -51,6 +51,8 @@ struct PltVenc
     int format;
     int codec;
     int rc_mode;
+    int rotation;
+    int mirror;
     bool mismatch_logged;
     std::vector<uint8_t> extradata;
     std::deque<EncPacket> queue;
@@ -79,6 +81,8 @@ struct PltVenc
         , format(0)
         , codec(BASE_CODEC_H264)
         , rc_mode(0)
+        , rotation(0)
+        , mirror(0)
         , mismatch_logged(false)
         , held_valid(0)
 #ifdef RK_3588
@@ -247,6 +251,64 @@ int ParamOk(const PltVencParam *param)
 }
 
 /* CBR 上下限收得窄，VBR 下限放宽，取值同 MPP 示例。 */
+void ReadHeader(PltVenc *enc)
+{
+    MppPacket packet = nullptr;
+    void *pos;
+    size_t len;
+    if (enc->packet_buf == nullptr || enc->mpi == nullptr)
+    {
+        return;
+    }
+    if (mpp_packet_init_with_buffer(&packet, enc->packet_buf) != MPP_OK)
+    {
+        return;
+    }
+    mpp_packet_set_length(packet, 0);
+    if (enc->mpi->control(enc->ctx, MPP_ENC_GET_HDR_SYNC, packet) == MPP_OK)
+    {
+        pos = mpp_packet_get_pos(packet);
+        len = mpp_packet_get_length(packet);
+        if (pos != nullptr && len > 0)
+        {
+            enc->extradata.assign((uint8_t *)pos, (uint8_t *)pos + len);
+        }
+    }
+    else
+    {
+        fprintf(stderr, "[plt.venc] header sync failed\n");
+    }
+    mpp_packet_deinit(&packet);
+}
+
+BaseStatus SetPrep(PltVenc *enc, int rotation, int mirror)
+{
+    MppEncCfg cfg = nullptr;
+    int ok;
+    if (mpp_enc_cfg_init(&cfg) != MPP_OK)
+    {
+        return BASE_ERR;
+    }
+    ok = enc->mpi->control(enc->ctx, MPP_ENC_GET_CFG, cfg) == MPP_OK;
+    if (ok)
+    {
+        mpp_enc_cfg_set_s32(cfg, "prep:rotation", rotation);
+        mpp_enc_cfg_set_s32(cfg, "prep:mirroring", mirror);
+        ok = enc->mpi->control(enc->ctx, MPP_ENC_SET_CFG, cfg) == MPP_OK;
+    }
+    mpp_enc_cfg_deinit(cfg);
+    if (!ok)
+    {
+        fprintf(stderr, "[plt.venc] set rotation %d mirror %d failed\n", rotation, mirror);
+        return BASE_ERR;
+    }
+    enc->rotation = rotation;
+    enc->mirror = mirror;
+    /* 90° 和 270° 会改码流宽高，参数集要重新取。 */
+    ReadHeader(enc);
+    return BASE_OK;
+}
+
 void SetBitrate(MppEncCfg cfg, int rc_mode, int bitrate)
 {
     mpp_enc_cfg_set_s32(cfg, "rc:bps_target", bitrate);
@@ -330,7 +392,6 @@ extern "C" BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
     PltVenc *enc;
     MppCodingType coding;
     MppEncHeaderMode header_mode;
-    MppPacket packet;
     if (out == nullptr || !plt_rk_ready())
     {
         if (out != nullptr)
@@ -394,6 +455,8 @@ extern "C" BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
     mpp_enc_cfg_set_s32(enc->cfg, "prep:hor_stride", StrideBytes(param->format, enc->hor_stride));
     mpp_enc_cfg_set_s32(enc->cfg, "prep:ver_stride", enc->ver_stride);
     mpp_enc_cfg_set_s32(enc->cfg, "prep:format", MppFormat(param->format));
+    mpp_enc_cfg_set_s32(enc->cfg, "prep:rotation", MPP_ENC_ROT_0);
+    mpp_enc_cfg_set_s32(enc->cfg, "prep:mirroring", 0);
     mpp_enc_cfg_set_s32(enc->cfg, "rc:mode", param->rc_mode == PLT_RC_CBR ? MPP_ENC_RC_MODE_CBR : MPP_ENC_RC_MODE_VBR);
     mpp_enc_cfg_set_s32(enc->cfg, "rc:fps_in_num", param->fps);
     mpp_enc_cfg_set_s32(enc->cfg, "rc:fps_in_denorm", 1);
@@ -445,27 +508,7 @@ extern "C" BaseStatus plt_venc_open(const PltVencParam *param, PltVenc **out)
 #endif
 
     /* 单独取出参数集。关键帧模式仍会把它附在每个 IDR 上。 */
-    packet = nullptr;
-    if (mpp_packet_init_with_buffer(&packet, enc->packet_buf) == MPP_OK)
-    {
-        void *pos;
-        size_t len;
-        mpp_packet_set_length(packet, 0);
-        if (enc->mpi->control(enc->ctx, MPP_ENC_GET_HDR_SYNC, packet) == MPP_OK)
-        {
-            pos = mpp_packet_get_pos(packet);
-            len = mpp_packet_get_length(packet);
-            if (pos != nullptr && len > 0)
-            {
-                enc->extradata.assign((uint8_t *)pos, (uint8_t *)pos + len);
-            }
-        }
-        else
-        {
-            fprintf(stderr, "[plt.venc] header sync failed\n");
-        }
-        mpp_packet_deinit(&packet);
-    }
+    ReadHeader(enc);
 
     *out = enc;
     return BASE_OK;
@@ -840,4 +883,43 @@ extern "C" BaseStatus plt_venc_set_osd(PltVenc *enc, const PltVencOsd *regions, 
     }
     enc->osd = next;
     return BASE_OK;
+}
+
+extern "C" BaseStatus plt_venc_set_rotation(PltVenc *enc, int angle)
+{
+    int rotation;
+    if (enc == nullptr || enc->mpi == nullptr)
+    {
+        return BASE_ERR;
+    }
+    if (angle == 0)
+    {
+        rotation = MPP_ENC_ROT_0;
+    }
+    else if (angle == 90)
+    {
+        rotation = MPP_ENC_ROT_90;
+    }
+    else if (angle == 180)
+    {
+        rotation = MPP_ENC_ROT_180;
+    }
+    else if (angle == 270)
+    {
+        rotation = MPP_ENC_ROT_270;
+    }
+    else
+    {
+        return BASE_ERR;
+    }
+    return SetPrep(enc, rotation, enc->mirror);
+}
+
+extern "C" BaseStatus plt_venc_set_mirror(PltVenc *enc, int direction)
+{
+    if (enc == nullptr || enc->mpi == nullptr || direction < 0 || direction > 2)
+    {
+        return BASE_ERR;
+    }
+    return SetPrep(enc, enc->rotation, direction);
 }

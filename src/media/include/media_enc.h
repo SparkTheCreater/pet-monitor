@@ -82,6 +82,19 @@ BaseStatus media_enc_request_keyframe(MediaEnc *enc);
 /* 下一帧起用新的目标码率。码率模式和 QP 不变。 */
 BaseStatus media_enc_set_bitrate(MediaEnc *enc, int bitrate);
 
+/*
+ * 下一帧起逆时针旋转。angle 为 0、90、180、270。
+ * 送进来的图宽高不变。90 和 270 时码流宽高对调，参数集会更新。
+ * 不合法时保持原角度。和 send 由调用方串行调用。
+ */
+BaseStatus media_enc_set_rotation(MediaEnc *enc, int angle);
+
+/*
+ * 下一帧起镜像。direction 为 0 不镜像、1 水平、2 垂直。
+ * 不合法时保持原镜像。和 send 由调用方串行调用。
+ */
+BaseStatus media_enc_set_mirror(MediaEnc *enc, int direction);
+
 /* 一块感兴趣区域。坐标和宽高按像素，必须 16 对齐，并且落在画面里。 */
 typedef struct MediaEncRoi
 {

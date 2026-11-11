@@ -92,5 +92,7 @@ int main(void)
     Expect(media_enc_extradata(NULL, &extra, &extra_size) == BASE_ERR, "encoder extradata");
     Expect(extra == NULL && extra_size == 0, "encoder extradata cleared");
     Expect(media_enc_set_bitrate(NULL, 1000000) == BASE_ERR, "encoder bitrate");
+    Expect(media_enc_set_rotation(NULL, 90) == BASE_ERR, "encoder rotation");
+    Expect(media_enc_set_mirror(NULL, 1) == BASE_ERR, "encoder mirror");
     return g_failed ? 1 : 0;
 }

@@ -202,6 +202,24 @@ BaseStatus media_enc_set_bitrate(MediaEnc *enc, int bitrate)
     return plt_venc_set_bitrate(enc->enc, bitrate);
 }
 
+BaseStatus media_enc_set_rotation(MediaEnc *enc, int angle)
+{
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    return plt_venc_set_rotation(enc->enc, angle);
+}
+
+BaseStatus media_enc_set_mirror(MediaEnc *enc, int direction)
+{
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    return plt_venc_set_mirror(enc->enc, direction);
+}
+
 BaseStatus media_enc_set_roi(MediaEnc *enc, const MediaEncRoi *regions, int count)
 {
     PltVencRoi local[8];

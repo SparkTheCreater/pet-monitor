@@ -339,6 +339,20 @@ BaseStatus plt_venc_set_bitrate(PltVenc *enc, int bitrate)
     return BASE_ERR;
 }
 
+BaseStatus plt_venc_set_rotation(PltVenc *enc, int angle)
+{
+    (void)enc;
+    (void)angle;
+    return BASE_ERR;
+}
+
+BaseStatus plt_venc_set_mirror(PltVenc *enc, int direction)
+{
+    (void)enc;
+    (void)direction;
+    return BASE_ERR;
+}
+
 BaseStatus plt_venc_set_roi(PltVenc *enc, const PltVencRoi *regions, int count)
 {
     (void)enc;

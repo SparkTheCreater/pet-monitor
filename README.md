@@ -21,7 +21,7 @@
 - 画线、画框、填色：`media_pic_line`、`media_pic_box`、`media_pic_fill`。里面调用平台层对应的接口。
 - 旋转、翻转、平移：`media_pic_rotate`、`media_pic_flip`、`media_pic_translate`。旋转为顺时针 90/180/270。
 - JPEG：`media_jpeg_encode` 编码，`media_jpeg_decode` 解码。编码返回时码流已经出来，用 `media_jpeg_free` 释放。解码得到全范围 NV12，用 `plt_mem_free` 释放。
-- 视频编码：类型是 `MediaEnc`，打开用 `media_enc_open`。参数不合法返回失败。平台层没有视频编码器时，参数合法也返回不支持。送帧、取流、参数集、关键帧、改码率和感兴趣区域都交给已打开的编码器。参数集用 `media_enc_extradata` 取，关闭前一直有效。感兴趣区域由调用方给出，这里不按画面区域改写。OSD 用 `media_enc_set_osd` 送最多 8 块下标图，颜色用 `media_enc_set_osd_palette`。
+- 视频编码：类型是 `MediaEnc`，打开用 `media_enc_open`。参数不合法返回失败。平台层没有视频编码器时，参数合法也返回不支持。送帧、取流、参数集、关键帧、改码率和感兴趣区域都交给已打开的编码器。参数集用 `media_enc_extradata` 取，关闭前一直有效。感兴趣区域由调用方给出，这里不按画面区域改写。OSD 用 `media_enc_set_osd` 送最多 8 块下标图，颜色用 `media_enc_set_osd_palette`。编码旋转、镜像用 `media_enc_set_rotation`、`media_enc_set_mirror`，方向按 MPP：逆时针 0/90/180/270，镜像 0 无、1 水平、2 垂直。
 
 公共类型在 `base`，例如 `BaseImage`、`BaseStatus`、`BASE_OK`。平台层库名是 `plt`。
 

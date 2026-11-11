@@ -5,7 +5,10 @@
 #include "media_dec.h"
 #include "media_enc.h"
 #include "media_jpeg.h"
+#include "media_mem.h"
+#include "media_npu.h"
 #include "media_pic.h"
+#include "media_sys.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -27,7 +30,33 @@ int main(void)
     MediaDec *dec = (MediaDec *)1;
     MediaEnc *enc = (MediaEnc *)1;
     MediaEncParam param;
+    MediaNpu *npu = (MediaNpu *)1;
+    MediaNpuTensor tensor;
     BaseStatus status;
+    BaseImage image;
+    int count;
+
+    Expect(media_init() == BASE_ERR, "media init");
+    media_deinit();
+
+    memset(&image, 0, sizeof(image));
+    image.handle = (void *)1;
+    image.fd = 3;
+    Expect(media_mem_alloc(16, 16, BASE_PIX_NV12, &image) == BASE_ERR, "mem alloc");
+    Expect(image.handle == NULL && image.fd == -1, "mem alloc cleared");
+    media_mem_free(&image);
+    Expect(media_mem_flush(&image) == BASE_ERR, "mem flush");
+
+    Expect(media_npu_open("model.rknn", &npu) == BASE_ERR, "npu open");
+    Expect(npu == NULL, "npu cleared");
+    media_npu_close(NULL);
+    Expect(media_npu_set_core(NULL, 0) == BASE_ERR, "npu core");
+    Expect(media_npu_input_info(NULL, &tensor) == BASE_ERR, "npu input");
+    count = 1;
+    Expect(media_npu_output_count(NULL, &count) == BASE_ERR, "npu count");
+    Expect(count == 0, "npu count cleared");
+    Expect(media_npu_output_info(NULL, 0, &tensor) == BASE_ERR, "npu output");
+    Expect(media_npu_run(NULL, NULL, NULL, NULL) == BASE_ERR, "npu run");
 
     Expect(media_dec_open(BASE_CODEC_H264, 4, NULL, 0, &dec) == BASE_ERR, "decoder open");
     Expect(dec == NULL, "decoder cleared");
@@ -40,7 +69,6 @@ int main(void)
     Expect(jpeg == NULL && jpeg_len == 0, "jpeg encode cleared");
     media_jpeg_free(NULL);
 
-    BaseImage image;
     memset(&image, 0, sizeof(image));
     image.handle = (void *)1;
     image.fd = 3;

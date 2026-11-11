@@ -5,7 +5,7 @@
 #ifndef MEDIA_DEC_H
 #define MEDIA_DEC_H
 
-#include "plt/plt_vdec.h"
+#include "base_image.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -17,7 +17,7 @@ typedef struct MediaDec MediaDec;
 /*
  * 同步。codec 是 H.264 或 H.265，buf_count 是解码缓冲块数。
  * extradata 可以是 Annex B，也可以是 H.264 的 AVCC。没有就传空。
- * 失败时 *out 为空。调用前要先 plt_init。
+ * 失败时 *out 为空。调用前要先 media_init。
  */
 BaseStatus media_dec_open(int codec,
                           int buf_count,

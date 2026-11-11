@@ -53,10 +53,13 @@ endif()
 target_link_libraries(plt PUBLIC base)
 
 add_library(media STATIC
+    src/media/media_sys.c
+    src/media/media_mem.c
     src/media/media_dec.c
     src/media/media_enc.c
     src/media/media_pic.c
     src/media/media_jpeg.c
+    src/media/media_npu.c
 )
 target_include_directories(media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include)
 target_link_libraries(media PUBLIC plt)

@@ -4,6 +4,8 @@
  */
 #include "media_dec.h"
 
+#include "plt/plt_vdec.h"
+
 #include <stdlib.h>
 #include <string.h>
 

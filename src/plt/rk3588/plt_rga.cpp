@@ -1,11 +1,9 @@
 /**
  * @file    plt_rga.cpp
- * @brief   用 RGA 做裁剪、缩放、转色和描边。返回时硬件已经完成。
+ * @brief   用 RGA 做裁剪、缩放、转色、描边和填色。返回时硬件已经完成。
  */
 #include "plt/plt_rga.h"
-#ifdef RK_3588
 #include "plt/plt_mem.h"
-#endif
 
 #include "im2d.h"
 
@@ -264,6 +262,51 @@ int TooSmall(const Span *span)
     return span->w < 2 || span->h < 2;
 }
 
+/* librga 不接受起点为 1。只挪开这一像素，右下边不动。 */
+void FitRgb(Span *span)
+{
+    if (span->x == 1)
+    {
+        span->x = 2;
+        span->w -= 1;
+    }
+    if (span->y == 1)
+    {
+        span->y = 2;
+        span->h -= 1;
+    }
+}
+
+/* RGB888 在内存里按 R、G、B 排列。细条硬件做不了，CPU 直接写。 */
+BaseStatus FillCpu(BaseImage *dst, const Span *area, uint32_t rgb)
+{
+    uint8_t *base = (uint8_t *)dst->ptr;
+    const uint8_t r = (uint8_t)((rgb >> 16) & 0xffu);
+    const uint8_t g = (uint8_t)((rgb >> 8) & 0xffu);
+    const uint8_t b = (uint8_t)(rgb & 0xffu);
+    int row;
+    if (base == nullptr)
+    {
+        return BASE_ERR;
+    }
+    if (area->w <= 0 || area->h <= 0)
+    {
+        return BASE_OK;
+    }
+    for (row = 0; row < area->h; ++row)
+    {
+        uint8_t *pixel = base + ((size_t)(area->y + row) * (size_t)dst->hor_stride + (size_t)area->x) * 3;
+        int col;
+        for (col = 0; col < area->w; ++col)
+        {
+            pixel[col * 3] = r;
+            pixel[col * 3 + 1] = g;
+            pixel[col * 3 + 2] = b;
+        }
+    }
+    return plt_mem_flush(dst);
+}
+
 im_rect ToRect(const Span *span)
 {
     im_rect rect;
@@ -503,6 +546,92 @@ extern "C" BaseStatus plt_rga_boxes(BaseImage *dst, const BaseRect *boxes, int c
         if (!RgaOk(status))
         {
             fprintf(stderr, "[plt.rga] box failed %d\n", (int)status);
+            return BASE_ERR;
+        }
+    }
+    return BASE_OK;
+}
+
+extern "C" BaseStatus plt_rga_fill(BaseImage *dst, const BaseRect *rect, uint32_t rgb)
+{
+    Span area;
+    Span hw;
+    if (!base_image_valid(dst) || RgaFormat(dst->format) < 0)
+    {
+        return BASE_ERR;
+    }
+    if (rect == nullptr)
+    {
+        area = Whole(dst);
+    }
+    else if (ClipBox(dst, rect, &area) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    if (area.w <= 0 || area.h <= 0)
+    {
+        return BASE_OK;
+    }
+
+    hw = area;
+    if (IsYuv(dst->format))
+    {
+        AlignEven(&hw);
+    }
+    else
+    {
+        FitRgb(&hw);
+    }
+    if (!TooSmall(&hw))
+    {
+        RgaImage image;
+        IM_STATUS status;
+        if (Import(dst, &image) != BASE_OK)
+        {
+            fprintf(stderr, "[plt.rga] import buffer failed\n");
+            return BASE_ERR;
+        }
+        status = imfill(image.buf, ToRect(&hw), (int)PackColor(rgb), 1, nullptr);
+        if (!RgaOk(status))
+        {
+            fprintf(stderr, "[plt.rga] fill failed %d\n", (int)status);
+            return BASE_ERR;
+        }
+    }
+    else if (IsYuv(dst->format))
+    {
+        return BASE_OK;
+    }
+    else if (FillCpu(dst, &area, rgb) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    else
+    {
+        return BASE_OK;
+    }
+
+    if (!IsYuv(dst->format) && hw.x != area.x)
+    {
+        Span strip;
+        strip.x = area.x;
+        strip.y = area.y;
+        strip.w = hw.x - area.x;
+        strip.h = area.h;
+        if (FillCpu(dst, &strip, rgb) != BASE_OK)
+        {
+            return BASE_ERR;
+        }
+    }
+    if (!IsYuv(dst->format) && hw.y != area.y)
+    {
+        Span strip;
+        strip.x = area.x;
+        strip.y = area.y;
+        strip.w = area.w;
+        strip.h = hw.y - area.y;
+        if (FillCpu(dst, &strip, rgb) != BASE_OK)
+        {
             return BASE_ERR;
         }
     }

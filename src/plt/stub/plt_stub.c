@@ -114,6 +114,14 @@ BaseStatus plt_rga_boxes(BaseImage *dst, const BaseRect *boxes, int count, uint3
     return BASE_ERR;
 }
 
+BaseStatus plt_rga_fill(BaseImage *dst, const BaseRect *rect, uint32_t rgb)
+{
+    (void)dst;
+    (void)rect;
+    (void)rgb;
+    return BASE_ERR;
+}
+
 BaseStatus plt_rga_rotate(const BaseImage *src, BaseImage *dst, int angle)
 {
     (void)src;

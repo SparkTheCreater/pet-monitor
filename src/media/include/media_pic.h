@@ -1,6 +1,6 @@
 /**
  * @file    media_pic.h
- * @brief   用媒体层接口包住平台层的缩放、画线、画框、旋转、翻转和平移。返回时已经画完。
+ * @brief   用媒体层接口包住平台层的缩放、画线、画框、填色、旋转、翻转和平移。返回时已经画完。
  */
 #ifndef MEDIA_PIC_H
 #define MEDIA_PIC_H
@@ -45,6 +45,12 @@ BaseStatus media_pic_box(BaseImage *dst,
                          int count,
                          uint32_t rgb,
                          int thickness);
+
+/*
+ * 同步。在 dst 上填一块纯色，不另分配缓冲。rect 空指针表示整幅。
+ * rgb 是 0x00RRGGBB。超出图像的部分裁掉。空矩形返回 BASE_OK，宽或高为负返回 BASE_ERR。
+ */
+BaseStatus media_pic_fill(BaseImage *dst, const BaseRect *rect, uint32_t rgb);
 
 /* 同步。angle 为 90、180 或 270，顺时针。90 和 270 时 dst 宽高是 src 对调。 */
 BaseStatus media_pic_rotate(const BaseImage *src, BaseImage *dst, int angle);

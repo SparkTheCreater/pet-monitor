@@ -1,6 +1,6 @@
 /**
  * @file    plt_rga.h
- * @brief   裁剪、缩放、格式转换、画框、旋转、翻转和平移。调用返回时硬件已经做完。
+ * @brief   裁剪、缩放、格式转换、画框、填色、旋转、翻转和平移。调用返回时硬件已经做完。
  */
 #ifndef PLT_RGA_H
 #define PLT_RGA_H
@@ -35,6 +35,14 @@ BaseStatus plt_rga_boxes(BaseImage *dst,
                        int count,
                        uint32_t rgb,
                        int thickness);
+
+/*
+ * 同步。在 dst 上填一块纯色。rect 空指针表示整幅。rgb 是 0x00RRGGBB。
+ * 超出 dst 的部分裁掉。宽或高为 0、裁完为空时什么都不画，返回 BASE_OK。宽或高为负返回 BASE_ERR。
+ * 硬件做不了的 RGB888 细条由 CPU 补上。NV12 先对齐到偶数，对齐后不足 2 像素时跳过。
+ * 不分配缓冲。返回后 dst 仍归调用方。
+ */
+BaseStatus plt_rga_fill(BaseImage *dst, const BaseRect *rect, uint32_t rgb);
 
 typedef enum
 {

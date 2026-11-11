@@ -54,6 +54,7 @@ int main(void)
 
     ExpectErr(plt_rga_blit(NULL, NULL, NULL, NULL), "plt_rga_blit");
     ExpectErr(plt_rga_boxes(NULL, NULL, 0, 0, 1), "plt_rga_boxes");
+    ExpectErr(plt_rga_fill(NULL, NULL, 0), "plt_rga_fill");
     ExpectErr(plt_rga_rotate(NULL, NULL, PLT_ROTATE_90), "plt_rga_rotate");
     ExpectErr(plt_rga_flip(NULL, NULL, PLT_FLIP_HORIZONTAL), "plt_rga_flip");
     ExpectErr(plt_rga_translate(NULL, NULL, 0, 0), "plt_rga_translate");

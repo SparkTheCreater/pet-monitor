@@ -346,3 +346,19 @@ BaseStatus plt_venc_set_roi(PltVenc *enc, const PltVencRoi *regions, int count)
     (void)count;
     return BASE_ERR;
 }
+
+BaseStatus plt_venc_set_osd_palette(PltVenc *enc, const PltVencOsdColor *colors, int count)
+{
+    (void)enc;
+    (void)colors;
+    (void)count;
+    return BASE_ERR;
+}
+
+BaseStatus plt_venc_set_osd(PltVenc *enc, const PltVencOsd *regions, int count)
+{
+    (void)enc;
+    (void)regions;
+    (void)count;
+    return BASE_ERR;
+}

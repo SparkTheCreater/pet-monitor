@@ -227,3 +227,50 @@ BaseStatus media_enc_set_roi(MediaEnc *enc, const MediaEncRoi *regions, int coun
     }
     return plt_venc_set_roi(enc->enc, passed, count);
 }
+
+BaseStatus media_enc_set_osd_palette(MediaEnc *enc, const MediaEncOsdColor *colors, int count)
+{
+    PltVencOsdColor local[256];
+    int i;
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    if (count > 0 && count <= 256 && colors != NULL)
+    {
+        for (i = 0; i < count; i++)
+        {
+            local[i].y = colors[i].y;
+            local[i].u = colors[i].u;
+            local[i].v = colors[i].v;
+            local[i].alpha = colors[i].alpha;
+        }
+        return plt_venc_set_osd_palette(enc->enc, local, count);
+    }
+    return plt_venc_set_osd_palette(enc->enc, NULL, count);
+}
+
+BaseStatus media_enc_set_osd(MediaEnc *enc, const MediaEncOsd *regions, int count)
+{
+    PltVencOsd local[8];
+    const PltVencOsd *passed = NULL;
+    int i;
+    if (enc == NULL)
+    {
+        return BASE_ERR;
+    }
+    if (count > 0 && count <= 8 && regions != NULL)
+    {
+        for (i = 0; i < count; i++)
+        {
+            local[i].x = regions[i].x;
+            local[i].y = regions[i].y;
+            local[i].w = regions[i].w;
+            local[i].h = regions[i].h;
+            local[i].inverse = regions[i].inverse;
+            local[i].index = regions[i].index;
+        }
+        passed = local;
+    }
+    return plt_venc_set_osd(enc->enc, passed, count);
+}

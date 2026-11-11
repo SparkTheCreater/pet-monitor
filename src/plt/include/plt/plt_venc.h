@@ -109,6 +109,43 @@ BaseStatus plt_venc_set_bitrate(PltVenc *enc, int bitrate);
  */
 BaseStatus plt_venc_set_roi(PltVenc *enc, const PltVencRoi *regions, int count);
 
+/* 调色板里的一色。下标图里的每个字节选这里的一项。 */
+typedef struct PltVencOsdColor
+{
+    uint8_t y;
+    uint8_t u;
+    uint8_t v;
+    uint8_t alpha;
+}
+PltVencOsdColor;
+
+/*
+ * 设置调色板，最多 256 色。没给出的下标清成 0。
+ * count 为 0 时改回硬件默认调色板。不合法时保持原配置。
+ */
+BaseStatus plt_venc_set_osd_palette(PltVenc *enc, const PltVencOsdColor *colors, int count);
+
+/* 一块 OSD。坐标和宽高按像素，必须 16 对齐，并且落在画面里。 */
+typedef struct PltVencOsd
+{
+    int x;
+    int y;
+    int w;
+    int h;
+    /* 1 按背景亮度反色。 */
+    int inverse;
+    /* 每像素 1 字节调色板下标，长度 w * h，行优先。 */
+    const uint8_t *index;
+}
+PltVencOsd;
+
+/*
+ * 设置下一帧起的 OSD。最多 8 块，count 为 0 时清掉。
+ * 返回前已经把下标拷进设备缓冲。不合法时保持原配置。
+ * 和 send 由调用方串行调用。
+ */
+BaseStatus plt_venc_set_osd(PltVenc *enc, const PltVencOsd *regions, int count);
+
 #ifdef __cplusplus
 }
 #endif

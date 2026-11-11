@@ -105,6 +105,44 @@ MediaEncRoi;
  */
 BaseStatus media_enc_set_roi(MediaEnc *enc, const MediaEncRoi *regions, int count);
 
+/* 调色板里的一色。下标图里的每个字节选这里的一项。 */
+typedef struct MediaEncOsdColor
+{
+    uint8_t y;
+    uint8_t u;
+    uint8_t v;
+    uint8_t alpha;
+}
+MediaEncOsdColor;
+
+/*
+ * 设置调色板，最多 256 色。没给出的下标清成 0。
+ * count 为 0 时改回硬件默认调色板。不合法时保持原配置。
+ * 编码器没打开时返回 BASE_ERR。
+ */
+BaseStatus media_enc_set_osd_palette(MediaEnc *enc, const MediaEncOsdColor *colors, int count);
+
+/* 一块 OSD。坐标和宽高按像素，必须 16 对齐，并且落在画面里。 */
+typedef struct MediaEncOsd
+{
+    int x;
+    int y;
+    int w;
+    int h;
+    /* 1 按背景亮度反色。 */
+    int inverse;
+    /* 每像素 1 字节调色板下标，长度 w * h，行优先。这里不接收文字。 */
+    const uint8_t *index;
+}
+MediaEncOsd;
+
+/*
+ * 设置下一帧起的 OSD。最多 8 块，count 为 0 时清掉。
+ * 返回前已经把下标拷走。不合法时保持原配置。
+ * 和 send 由调用方串行调用。编码器没打开时返回 BASE_ERR。
+ */
+BaseStatus media_enc_set_osd(MediaEnc *enc, const MediaEncOsd *regions, int count);
+
 #ifdef __cplusplus
 }
 #endif

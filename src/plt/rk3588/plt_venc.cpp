@@ -3,6 +3,7 @@
  * @brief   MPP 视频编码。输入帧直接挂已有的 DRM buffer，不再拷贝像素。
  */
 #include "plt/plt_venc.h"
+#include "plt/plt_mem.h"
 
 #include "plt_internal.h"
 
@@ -56,6 +57,7 @@ struct PltVenc
     EncPacket held;
     int held_valid;
     std::vector<MppEncROIRegion> roi;
+    MppEncOSDData osd;
 #ifdef RK_3588
     MppBuffer roi_base;
     MppBuffer roi_qp;
@@ -89,6 +91,7 @@ struct PltVenc
 #ifdef RK_3588
         memset(&roi_hw, 0, sizeof(roi_hw));
 #endif
+        memset(&osd, 0, sizeof(osd));
     }
 };
 
@@ -300,6 +303,10 @@ extern "C" void plt_venc_close(PltVenc *enc)
     if (enc->packet_buf != nullptr)
     {
         mpp_buffer_put(enc->packet_buf);
+    }
+    if (enc->osd.buf != nullptr)
+    {
+        mpp_buffer_put(enc->osd.buf);
     }
 #ifdef RK_3588
     if (enc->roi_base != nullptr)
@@ -556,6 +563,12 @@ extern "C" BaseStatus plt_venc_send(PltVenc *enc, const BaseImage *image, int64_
     }
 #endif
 
+    /* OSD 下标缓冲要活到这一帧取完码流。HAL 按 KEY_OSD_DATA 读。 */
+    if (enc->osd.num_region > 0)
+    {
+        mpp_meta_set_ptr(mpp_frame_get_meta(frame), KEY_OSD_DATA, &enc->osd);
+    }
+
     if (mpp_packet_init_with_buffer(&packet, enc->packet_buf) != MPP_OK)
     {
         mpp_frame_deinit(&frame);
@@ -707,5 +720,124 @@ extern "C" BaseStatus plt_venc_set_roi(PltVenc *enc, const PltVencRoi *regions, 
         next.push_back(region);
     }
     enc->roi.swap(next);
+    return BASE_OK;
+}
+
+extern "C" BaseStatus plt_venc_set_osd_palette(PltVenc *enc, const PltVencOsdColor *colors, int count)
+{
+    MppEncOSDPltCfg cfg;
+    MppEncOSDPlt palette;
+    int i;
+    if (enc == nullptr || enc->mpi == nullptr || count < 0 || count > 256 || (count > 0 && colors == nullptr))
+    {
+        return BASE_ERR;
+    }
+    memset(&cfg, 0, sizeof(cfg));
+    if (count == 0)
+    {
+        cfg.change = MPP_ENC_OSD_PLT_CFG_CHANGE_MODE;
+        cfg.type = MPP_ENC_OSD_PLT_TYPE_DEFAULT;
+    }
+    else
+    {
+        memset(&palette, 0, sizeof(palette));
+        for (i = 0; i < count; ++i)
+        {
+            /* 和 MPP_ENC_OSD_PLT_* 一样：低字节是 Y，接着 U、V，最高字节是 alpha。 */
+            palette.data[i].val = ((RK_U32)colors[i].alpha << 24) |
+                                  ((RK_U32)colors[i].v << 16) |
+                                  ((RK_U32)colors[i].u << 8) |
+                                  (RK_U32)colors[i].y;
+        }
+        cfg.change = MPP_ENC_OSD_PLT_CFG_CHANGE_ALL;
+        cfg.type = MPP_ENC_OSD_PLT_TYPE_USERDEF;
+        cfg.plt = &palette;
+    }
+    if (enc->mpi->control(enc->ctx, MPP_ENC_SET_OSD_PLT_CFG, &cfg) != MPP_OK)
+    {
+        fprintf(stderr, "[plt.venc] osd palette failed\n");
+        return BASE_ERR;
+    }
+    return BASE_OK;
+}
+
+extern "C" BaseStatus plt_venc_set_osd(PltVenc *enc, const PltVencOsd *regions, int count)
+{
+    MppEncOSDData next;
+    MppBuffer buffer = nullptr;
+    uint8_t *dst;
+    size_t bytes = 0;
+    size_t offset = 0;
+    int i;
+    BaseImage view;
+    if (enc == nullptr || enc->group == nullptr || count < 0 || count > 8 || (count > 0 && regions == nullptr))
+    {
+        return BASE_ERR;
+    }
+    for (i = 0; i < count; ++i)
+    {
+        const PltVencOsd *src = &regions[i];
+        int inside = src->x >= 0 && src->y >= 0 && src->w > 0 && src->h > 0 &&
+                     src->x <= enc->width && src->w <= enc->width - src->x &&
+                     src->y <= enc->height && src->h <= enc->height - src->y;
+        int aligned = (src->x & 15) == 0 && (src->y & 15) == 0 && (src->w & 15) == 0 && (src->h & 15) == 0;
+        if (!inside || !aligned || src->index == nullptr || (src->inverse != 0 && src->inverse != 1))
+        {
+            return BASE_ERR;
+        }
+        bytes += (size_t)src->w * (size_t)src->h;
+    }
+    if (count == 0)
+    {
+        if (enc->osd.buf != nullptr)
+        {
+            mpp_buffer_put(enc->osd.buf);
+        }
+        memset(&enc->osd, 0, sizeof(enc->osd));
+        return BASE_OK;
+    }
+    if (mpp_buffer_get(enc->group, &buffer, bytes) != MPP_OK || buffer == nullptr)
+    {
+        fprintf(stderr, "[plt.venc] osd buffer failed\n");
+        return BASE_ERR;
+    }
+    dst = (uint8_t *)mpp_buffer_get_ptr(buffer);
+    if (dst == nullptr)
+    {
+        mpp_buffer_put(buffer);
+        return BASE_ERR;
+    }
+    memset(&next, 0, sizeof(next));
+    next.buf = buffer;
+    next.num_region = (RK_U32)count;
+    for (i = 0; i < count; ++i)
+    {
+        const PltVencOsd *src = &regions[i];
+        size_t region_bytes = (size_t)src->w * (size_t)src->h;
+        MppEncOSDRegion *region = &next.region[i];
+        memcpy(dst + offset, src->index, region_bytes);
+        region->enable = 1;
+        region->inverse = (RK_U32)src->inverse;
+        region->start_mb_x = (RK_U32)(src->x / 16);
+        region->start_mb_y = (RK_U32)(src->y / 16);
+        region->num_mb_x = (RK_U32)(src->w / 16);
+        region->num_mb_y = (RK_U32)(src->h / 16);
+        region->buf_offset = (RK_U32)offset;
+        offset += region_bytes;
+    }
+    memset(&view, 0, sizeof(view));
+    view.fd = mpp_buffer_get_fd(buffer);
+    view.handle = buffer;
+    if (plt_mem_flush(&view) != BASE_OK)
+    {
+        mpp_buffer_put(buffer);
+        fprintf(stderr, "[plt.venc] osd flush failed\n");
+        return BASE_ERR;
+    }
+    if (enc->osd.buf != nullptr)
+    {
+        mpp_buffer_put(enc->osd.buf);
+    }
+    enc->osd = next;
     return BASE_OK;
 }

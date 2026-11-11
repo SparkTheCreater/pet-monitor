@@ -56,6 +56,8 @@ int main(void)
     Expect(media_pic_flip(NULL, NULL, 0) == BASE_ERR, "flip");
     Expect(media_pic_translate(NULL, NULL, 0, 0) == BASE_ERR, "translate");
     Expect(media_enc_set_roi(NULL, NULL, 0) == BASE_ERR, "roi");
+    Expect(media_enc_set_osd(NULL, NULL, 0) == BASE_ERR, "osd");
+    Expect(media_enc_set_osd_palette(NULL, NULL, 0) == BASE_ERR, "osd palette");
 
     memset(&param, 0, sizeof(param));
     Expect(media_enc_open(NULL, &enc) == BASE_ERR, "encoder null");

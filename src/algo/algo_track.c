@@ -1,8 +1,8 @@
 /**
- * @file    media_ai_track.c
+ * @file    algo_track.c
  * @brief   追踪算法。复用检测框，在句柄里把同一目标串成编号。
  */
-#include "media_ai_internal.h"
+#include "algo_internal.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -20,7 +20,7 @@ Prev;
 struct AiTrack
 {
     AiDetect *detect;
-    Prev prev[MEDIA_AI_MAX];
+    Prev prev[ALGO_MAX];
     int n_prev;
     int next_id;
 };
@@ -52,7 +52,7 @@ static float Iou(const BaseRect *a, const BaseRect *b)
     return inter / uni;
 }
 
-BaseStatus ai_track_open(const char *model_path, const MediaAiOpenParam *param, AiTrack **out)
+BaseStatus ai_track_open(const char *model_path, const AlgoOpenParam *param, AiTrack **out)
 {
     AiTrack *track;
     if (out != NULL)
@@ -106,28 +106,28 @@ BaseStatus ai_track_infer(AiTrack *track)
     return ai_detect_infer(track->detect);
 }
 
-BaseStatus ai_track_postprocess(AiTrack *track, MediaAiTrackResult *result)
+BaseStatus ai_track_postprocess(AiTrack *track, AlgoTrackResult *result)
 {
-    MediaAiBox boxes[MEDIA_AI_MAX];
+    AlgoBox boxes[ALGO_MAX];
     int n;
     int i;
-    int used[MEDIA_AI_MAX];
+    int used[ALGO_MAX];
     int written;
     int capacity;
-    Prev next[MEDIA_AI_MAX];
+    Prev next[ALGO_MAX];
     if (track == NULL || result == NULL)
     {
         return BASE_ERR;
     }
     result->count = 0;
-    if (ai_detect_postprocess(track->detect, boxes, MEDIA_AI_MAX, &n) != BASE_OK)
+    if (ai_detect_postprocess(track->detect, boxes, ALGO_MAX, &n) != BASE_OK)
     {
         return BASE_ERR;
     }
-    capacity = MEDIA_AI_MAX;
+    capacity = ALGO_MAX;
     memset(used, 0, sizeof(used));
     written = 0;
-    for (i = 0; i < n && written < capacity && written < MEDIA_AI_MAX; ++i)
+    for (i = 0; i < n && written < capacity && written < ALGO_MAX; ++i)
     {
         int j;
         int best;
@@ -176,7 +176,7 @@ BaseStatus ai_track_postprocess(AiTrack *track, MediaAiTrackResult *result)
     return BASE_OK;
 }
 
-static BaseStatus TrackOpen(const char *model_path, const MediaAiOpenParam *param, void **impl)
+static BaseStatus TrackOpen(const char *model_path, const AlgoOpenParam *param, void **impl)
 {
     return ai_track_open(model_path, param, (AiTrack **)impl);
 }
@@ -198,20 +198,20 @@ static BaseStatus TrackInfer(void *impl)
 
 static BaseStatus TrackPost(void *impl, void *buf, int buf_size)
 {
-    if (buf == NULL || buf_size < (int)sizeof(MediaAiTrackResult))
+    if (buf == NULL || buf_size < (int)sizeof(AlgoTrackResult))
     {
         return BASE_ERR;
     }
-    return ai_track_postprocess((AiTrack *)impl, (MediaAiTrackResult *)buf);
+    return ai_track_postprocess((AiTrack *)impl, (AlgoTrackResult *)buf);
 }
 
 void ai_track_register(void)
 {
-    static const MediaAiModule mod =
+    static const AlgoModule mod =
     {
-        MEDIA_AI_TRACK,
+        ALGO_TRACK,
         "track",
-        (int)sizeof(MediaAiTrackResult),
+        (int)sizeof(AlgoTrackResult),
         TrackOpen,
         TrackClose,
         TrackPre,
@@ -219,5 +219,5 @@ void ai_track_register(void)
         TrackPost,
         NULL
     };
-    media_ai_register_mod(&mod);
+    algo_register_mod(&mod);
 }

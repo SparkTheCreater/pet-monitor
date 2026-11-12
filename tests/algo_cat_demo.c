@@ -1,10 +1,10 @@
 #define _POSIX_C_SOURCE 200809L
 
 /**
- * @file    media_ai_cat_demo.c
- * @brief   用一张 JPEG 走一遍猫检测插件。默认模型是 models/Catto.rknn。
+ * @file    algo_cat_demo.c
+ * @brief   用一张 JPEG 走一遍猫检测。默认模型是 models/Catto.rknn。
  */
-#include "media_ai.h"
+#include "algo.h"
 #include "media_jpeg.h"
 #include "media_mem.h"
 #include "media_sys.h"
@@ -23,11 +23,11 @@ typedef struct
     int done;
     int cb_type;
     int status;
-    MediaAiDetectResult result;
+    AlgoDetectResult result;
 }
 Wait;
 
-static void OnDetect(const MediaAiCallbackInfo *info)
+static void OnDetect(const AlgoCallbackInfo *info)
 {
     Wait *wait;
     wait = (Wait *)info->user;
@@ -35,9 +35,9 @@ static void OnDetect(const MediaAiCallbackInfo *info)
     wait->cb_type = info->cb_type;
     wait->status = info->status;
     memset(&wait->result, 0, sizeof(wait->result));
-    if (info->cb_type == MEDIA_AI_CB_DATA &&
+    if (info->cb_type == ALGO_CB_DATA &&
         info->buf != NULL &&
-        info->buf_size >= (int)sizeof(MediaAiDetectResult))
+        info->buf_size >= (int)sizeof(AlgoDetectResult))
     {
         memcpy(&wait->result, info->buf, sizeof(wait->result));
     }
@@ -99,13 +99,13 @@ static unsigned char *ReadFile(const char *path, size_t *size)
     return data;
 }
 
-static void PrintCats(const BaseImage *image, const MediaAiDetectResult *result)
+static void PrintCats(const BaseImage *image, const AlgoDetectResult *result)
 {
     int i;
     printf("detect count=%d\n", result->count);
     for (i = 0; i < result->count; ++i)
     {
-        const MediaAiBox *box = &result->box[i];
+        const AlgoBox *box = &result->box[i];
         float cx;
         float cy;
         cx = ((float)box->box.x + (float)box->box.w * 0.5f) / (float)image->width;
@@ -129,10 +129,9 @@ int main(int argc, char **argv)
     unsigned char *jpeg = NULL;
     size_t jpeg_size = 0;
     BaseImage image;
-    MediaAi *ai = NULL;
-    MediaAiInput in;
+    Algo *ai = NULL;
+    AlgoInput in;
     Wait wait;
-    int loaded = 0;
     int code = 1;
 
     memset(&image, 0, sizeof(image));
@@ -162,35 +161,29 @@ int main(int argc, char **argv)
         fprintf(stderr, "image is too small\n");
         goto out;
     }
-    if (media_ai_load(MEDIA_AI_CAT_DET_PLUGIN) != BASE_OK)
+    if (algo_open(NULL, &ai) != BASE_OK)
     {
-        fprintf(stderr, "media_ai_load failed\n");
+        fprintf(stderr, "algo_open failed\n");
         goto out;
     }
-    loaded = 1;
-    if (media_ai_open(NULL, &ai) != BASE_OK)
+    if (algo_add(ai, ALGO_CAT_DET, model_path) != BASE_OK)
     {
-        fprintf(stderr, "media_ai_open failed\n");
+        fprintf(stderr, "algo_add failed: %s\n", model_path);
         goto out;
     }
-    if (media_ai_add(ai, MEDIA_AI_CAT_DET, model_path) != BASE_OK)
+    if (algo_set_callback(ai, ALGO_CAT_DET, OnDetect, &wait) != BASE_OK)
     {
-        fprintf(stderr, "media_ai_add failed: %s\n", model_path);
-        goto out;
-    }
-    if (media_ai_set_callback(ai, MEDIA_AI_CAT_DET, OnDetect, &wait) != BASE_OK)
-    {
-        fprintf(stderr, "media_ai_set_callback failed\n");
+        fprintf(stderr, "algo_set_callback failed\n");
         goto out;
     }
 
     memset(&in, 0, sizeof(in));
-    in.type = MEDIA_AI_DATA_FRAME;
+    in.type = ALGO_DATA_FRAME;
     in.frame = &image;
-    in.exec = MEDIA_AI_EXEC_SERIAL;
-    if (media_ai_input(ai, &in) != BASE_OK)
+    in.exec = ALGO_EXEC_SERIAL;
+    if (algo_input(ai, &in) != BASE_OK)
     {
-        fprintf(stderr, "media_ai_input failed\n");
+        fprintf(stderr, "algo_input failed\n");
         goto out;
     }
     if (!WaitDone(&wait))
@@ -198,7 +191,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "callback timeout\n");
         goto out;
     }
-    if (wait.cb_type != MEDIA_AI_CB_DATA || wait.status != BASE_OK)
+    if (wait.cb_type != ALGO_CB_DATA || wait.status != BASE_OK)
     {
         fprintf(stderr, "callback type=%d status=%d\n", wait.cb_type, wait.status);
         goto out;
@@ -207,11 +200,7 @@ int main(int argc, char **argv)
     code = wait.result.count > 0 ? 0 : 2;
 
 out:
-    media_ai_close(ai);
-    if (loaded)
-    {
-        media_ai_unload(MEDIA_AI_CAT_DET_PLUGIN);
-    }
+    algo_close(ai);
     media_mem_free(&image);
     free(jpeg);
     media_deinit();

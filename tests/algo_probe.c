@@ -1,12 +1,12 @@
 /**
- * @file    media_ai_probe.c
- * @brief   给 media_ai_load 用的最小插件。种类号 80。
+ * @file    algo_probe.c
+ * @brief   给 algo_load 用的最小插件。种类号 80。
  */
-#include "media_ai.h"
+#include "algo.h"
 
 #include <stdlib.h>
 
-static BaseStatus Open(const char *model_path, const MediaAiOpenParam *param, void **impl)
+static BaseStatus Open(const char *model_path, const AlgoOpenParam *param, void **impl)
 {
     (void)model_path;
     (void)param;
@@ -54,7 +54,7 @@ static BaseStatus Post(void *impl, void *buf, int buf_size)
     return BASE_OK;
 }
 
-static const MediaAiModule g_mod =
+static const AlgoModule g_mod =
 {
     80,
     "probe",
@@ -67,7 +67,7 @@ static const MediaAiModule g_mod =
     NULL
 };
 
-const MediaAiModule *media_ai_module(void)
+const AlgoModule *algo_module(void)
 {
     return &g_mod;
 }

@@ -1,12 +1,11 @@
 /**
- * @file    media_ai_cat_det.c
- * @brief   猫检测插件。导出 media_ai_module，种类号 MEDIA_AI_CAT_DET。
+ * @file    algo_cat_det.c
+ * @brief   猫检测。和检测、追踪、识别一起登记，种类号 ALGO_CAT_DET。
  *
- * 模型由 media_ai_add 传入。配套的是 models/Catto.rknn：
+ * 模型由 algo_add 传入。配套的是 models/Catto.rknn：
  * 一个输出，每行 xywh、obj、cls，xywh 在补灰后的模型图上。
- * 插件链接 libmedia.so，和加载它的进程共用这一份。
  */
-#include "media_ai.h"
+#include "algo_internal.h"
 
 #include "media_mem.h"
 #include "media_npu.h"
@@ -264,7 +263,7 @@ static void Release(CatDet *det)
     free(det);
 }
 
-static BaseStatus Open(const char *model_path, const MediaAiOpenParam *param, void **impl)
+static BaseStatus Open(const char *model_path, const AlgoOpenParam *param, void **impl)
 {
     CatDet *det;
     MediaNpuTensor input;
@@ -399,12 +398,12 @@ static int Collect(const CatDet *det, Cand *cand, int cap)
 static BaseStatus Postprocess(void *impl, void *buf, int buf_size)
 {
     CatDet *det;
-    MediaAiDetectResult *result;
+    AlgoDetectResult *result;
     int n;
     int i;
     int written;
     det = (CatDet *)impl;
-    result = (MediaAiDetectResult *)buf;
+    result = (AlgoDetectResult *)buf;
     if (result == NULL || buf_size < (int)sizeof(*result))
     {
         return BASE_ERR;
@@ -439,7 +438,7 @@ static BaseStatus Postprocess(void *impl, void *buf, int buf_size)
         }
     }
     written = 0;
-    for (i = 0; i < n && written < MEDIA_AI_MAX; ++i)
+    for (i = 0; i < n && written < ALGO_MAX; ++i)
     {
         BaseRect box;
         if (det->cand[i].score < kScoreMin)
@@ -450,7 +449,7 @@ static BaseStatus Postprocess(void *impl, void *buf, int buf_size)
         {
             continue;
         }
-        result->box[written].type = MEDIA_AI_CAT;
+        result->box[written].type = ALGO_CAT;
         result->box[written].score = det->cand[i].score;
         result->box[written].box = box;
         written += 1;
@@ -459,11 +458,11 @@ static BaseStatus Postprocess(void *impl, void *buf, int buf_size)
     return BASE_OK;
 }
 
-static const MediaAiModule g_mod =
+static const AlgoModule g_mod =
 {
-    MEDIA_AI_CAT_DET,
+    ALGO_CAT_DET,
     "cat_det",
-    (int)sizeof(MediaAiDetectResult),
+    (int)sizeof(AlgoDetectResult),
     Open,
     Close,
     Preprocess,
@@ -472,7 +471,7 @@ static const MediaAiModule g_mod =
     NULL
 };
 
-const MediaAiModule *media_ai_module(void)
+void algo_cat_det_register(void)
 {
-    return &g_mod;
+    algo_register_mod(&g_mod);
 }

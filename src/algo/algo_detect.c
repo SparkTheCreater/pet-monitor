@@ -1,8 +1,8 @@
 /**
- * @file    media_ai_detect.c
+ * @file    algo_detect.c
  * @brief   检测算法。一帧原图在内部补灰缩放，再解 YOLOv5 的猫。
  */
-#include "media_ai_internal.h"
+#include "algo_internal.h"
 
 #include "media_mem.h"
 #include "media_npu.h"
@@ -65,7 +65,7 @@ static int TypeOf(int coco)
 {
     if (coco == kCocoCat)
     {
-        return MEDIA_AI_CAT;
+        return ALGO_CAT;
     }
     return -1;
 }
@@ -354,7 +354,7 @@ static void Release(AiDetect *det)
     free(det);
 }
 
-BaseStatus ai_detect_open(const char *model_path, const MediaAiOpenParam *param, AiDetect **out)
+BaseStatus ai_detect_open(const char *model_path, const AlgoOpenParam *param, AiDetect **out)
 {
     AiDetect *det;
     MediaNpuTensor input;
@@ -480,7 +480,7 @@ BaseStatus ai_detect_infer(AiDetect *det)
     return media_npu_run(det->npu, &det->canvas, outputs, det->bytes);
 }
 
-BaseStatus ai_detect_postprocess(AiDetect *det, MediaAiBox *boxes, int capacity, int *count)
+BaseStatus ai_detect_postprocess(AiDetect *det, AlgoBox *boxes, int capacity, int *count)
 {
     int want[80];
     int i;
@@ -551,7 +551,7 @@ BaseStatus ai_detect_postprocess(AiDetect *det, MediaAiBox *boxes, int capacity,
     return BASE_OK;
 }
 
-static BaseStatus DetectOpen(const char *model_path, const MediaAiOpenParam *param, void **impl)
+static BaseStatus DetectOpen(const char *model_path, const AlgoOpenParam *param, void **impl)
 {
     return ai_detect_open(model_path, param, (AiDetect **)impl);
 }
@@ -573,22 +573,22 @@ static BaseStatus DetectInfer(void *impl)
 
 static BaseStatus DetectPost(void *impl, void *buf, int buf_size)
 {
-    MediaAiDetectResult *result;
-    result = (MediaAiDetectResult *)buf;
+    AlgoDetectResult *result;
+    result = (AlgoDetectResult *)buf;
     if (result == NULL || buf_size < (int)sizeof(*result))
     {
         return BASE_ERR;
     }
-    return ai_detect_postprocess((AiDetect *)impl, result->box, MEDIA_AI_MAX, &result->count);
+    return ai_detect_postprocess((AiDetect *)impl, result->box, ALGO_MAX, &result->count);
 }
 
 void ai_detect_register(void)
 {
-    static const MediaAiModule mod =
+    static const AlgoModule mod =
     {
-        MEDIA_AI_DETECT,
+        ALGO_DETECT,
         "detect",
-        (int)sizeof(MediaAiDetectResult),
+        (int)sizeof(AlgoDetectResult),
         DetectOpen,
         DetectClose,
         DetectPre,
@@ -596,5 +596,5 @@ void ai_detect_register(void)
         DetectPost,
         NULL
     };
-    media_ai_register_mod(&mod);
+    algo_register_mod(&mod);
 }

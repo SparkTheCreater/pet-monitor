@@ -1,8 +1,8 @@
 /**
- * @file    media_ai_recog.c
+ * @file    algo_recog.c
  * @brief   识别算法。整图缩放到模型输入，取得分最高的一类。
  */
-#include "media_ai_internal.h"
+#include "algo_internal.h"
 
 #include "media_mem.h"
 #include "media_npu.h"
@@ -88,7 +88,7 @@ static void Release(AiRecog *recog)
     free(recog);
 }
 
-BaseStatus ai_recog_open(const char *model_path, const MediaAiOpenParam *param, AiRecog **out)
+BaseStatus ai_recog_open(const char *model_path, const AlgoOpenParam *param, AiRecog **out)
 {
     AiRecog *recog;
     MediaNpuTensor input;
@@ -169,7 +169,7 @@ BaseStatus ai_recog_infer(AiRecog *recog)
     return media_npu_run(recog->npu, &recog->canvas, &output, &recog->bytes);
 }
 
-BaseStatus ai_recog_postprocess(AiRecog *recog, MediaAiRecog *out)
+BaseStatus ai_recog_postprocess(AiRecog *recog, AlgoRecog *out)
 {
     int i;
     int best;
@@ -207,7 +207,7 @@ BaseStatus ai_recog_postprocess(AiRecog *recog, MediaAiRecog *out)
     return BASE_OK;
 }
 
-static BaseStatus RecogOpen(const char *model_path, const MediaAiOpenParam *param, void **impl)
+static BaseStatus RecogOpen(const char *model_path, const AlgoOpenParam *param, void **impl)
 {
     return ai_recog_open(model_path, param, (AiRecog **)impl);
 }
@@ -229,20 +229,20 @@ static BaseStatus RecogInfer(void *impl)
 
 static BaseStatus RecogPost(void *impl, void *buf, int buf_size)
 {
-    if (buf == NULL || buf_size < (int)sizeof(MediaAiRecog))
+    if (buf == NULL || buf_size < (int)sizeof(AlgoRecog))
     {
         return BASE_ERR;
     }
-    return ai_recog_postprocess((AiRecog *)impl, (MediaAiRecog *)buf);
+    return ai_recog_postprocess((AiRecog *)impl, (AlgoRecog *)buf);
 }
 
 void ai_recog_register(void)
 {
-    static const MediaAiModule mod =
+    static const AlgoModule mod =
     {
-        MEDIA_AI_RECOGNIZE,
+        ALGO_RECOGNIZE,
         "recognize",
-        (int)sizeof(MediaAiRecog),
+        (int)sizeof(AlgoRecog),
         RecogOpen,
         RecogClose,
         RecogPre,
@@ -250,5 +250,5 @@ void ai_recog_register(void)
         RecogPost,
         NULL
     };
-    media_ai_register_mod(&mod);
+    algo_register_mod(&mod);
 }

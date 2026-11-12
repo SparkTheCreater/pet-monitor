@@ -63,16 +63,21 @@ add_library(media SHARED
     src/media/media_pic.c
     src/media/media_jpeg.c
     src/media/media_npu.c
-    src/media/media_ai.c
-    src/media/media_ai_detect.c
-    src/media/media_ai_track.c
-    src/media/media_ai_recog.c
 )
 target_include_directories(media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include)
 target_link_libraries(media PUBLIC plt)
 
 find_package(Threads REQUIRED)
-target_link_libraries(media PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+
+add_library(algo SHARED
+    src/algo/algo.c
+    src/algo/algo_detect.c
+    src/algo/algo_track.c
+    src/algo/algo_recog.c
+    src/algo/algo_cat_det.c
+)
+target_include_directories(algo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/algo/include)
+target_link_libraries(algo PUBLIC media Threads::Threads ${CMAKE_DL_LIBS})
 
 find_package(OpenSSL REQUIRED)
 
@@ -86,35 +91,29 @@ if(PM_PLATFORM STREQUAL "stub")
     target_link_libraries(plt_stub_test PRIVATE plt)
     add_test(NAME plt_stub_test COMMAND plt_stub_test)
 
-    add_library(media_ai_probe MODULE tests/media_ai_probe.c)
-    target_include_directories(media_ai_probe PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include
+    add_library(algo_probe MODULE tests/algo_probe.c)
+    target_include_directories(algo_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/algo/include
         ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include
     )
+    target_link_libraries(algo_probe PRIVATE algo)
 
     add_executable(media_stub_test tests/media_stub_test.c)
     target_link_libraries(media_stub_test PRIVATE media)
-    target_compile_definitions(media_stub_test PRIVATE "MEDIA_AI_PLUGIN=\"$<TARGET_FILE:media_ai_probe>\"")
-    add_dependencies(media_stub_test media_ai_probe)
     add_test(NAME media_stub_test COMMAND media_stub_test)
+
+    add_executable(algo_stub_test tests/algo_stub_test.c)
+    target_link_libraries(algo_stub_test PRIVATE algo)
+    target_compile_definitions(algo_stub_test PRIVATE "ALGO_PLUGIN=\"$<TARGET_FILE:algo_probe>\"")
+    add_dependencies(algo_stub_test algo_probe)
+    add_test(NAME algo_stub_test COMMAND algo_stub_test)
 
     add_executable(app_email_test tests/app_email_test.c)
     target_link_libraries(app_email_test PRIVATE app)
     add_test(NAME app_email_test COMMAND app_email_test)
 endif()
 
-add_library(media_ai_cat_det MODULE src/media/media_ai_cat_det.c)
-target_include_directories(media_ai_cat_det PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include
-)
-target_link_libraries(media_ai_cat_det PRIVATE media)
-
 if(PM_PLATFORM STREQUAL "rk3588")
-    add_executable(media_ai_cat_demo tests/media_ai_cat_demo.c)
-    target_link_libraries(media_ai_cat_demo PRIVATE media)
-    target_compile_definitions(media_ai_cat_demo PRIVATE
-        "MEDIA_AI_CAT_DET_PLUGIN=\"$<TARGET_FILE:media_ai_cat_det>\""
-    )
-    add_dependencies(media_ai_cat_demo media_ai_cat_det)
+    add_executable(algo_cat_demo tests/algo_cat_demo.c)
+    target_link_libraries(algo_cat_demo PRIVATE algo)
 endif()

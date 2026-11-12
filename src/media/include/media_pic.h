@@ -24,10 +24,11 @@ BaseStatus media_pic_scale(const BaseImage *src,
 
 /*
  * 一次预处理的几何。送进模型的是整幅目标图，框先落在这张图上。
- * scale：源图像素乘它，得到内容在目标图上的长度。由较短的一边决定，宽高共用。
- * x_pad、y_pad：灰边靠左、靠上的宽度。另一侧一样长。除不尽时多出的 1 像素留在右或下。
- * content_w、content_h：缩放后的画面宽高，不含灰边。
- * 回到源图用同一份数：x = (x_dst - x_pad) / scale，y = (y_dst - y_pad) / scale。
+ * scale：决定这次缩放的那一边，内容长度除以源边长度。1920×1080 放进 640×640 时就是 640/1920。
+ * x_pad、y_pad：灰边靠左、靠上的宽度，按偶数向上对齐。另一侧一样长；目标尺寸是奇数时，多出的 1 像素留在右或下。
+ * content_w、content_h：缩放后的画面宽高，不含灰边，也是偶数。
+ * 宽高对齐后可能差 2 像素，回源图以内容尺寸为准：
+ * x = (x_dst - x_pad) * src_w / content_w，y = (y_dst - y_pad) * src_h / content_h。
  */
 typedef struct MediaPicPreprocess
 {
@@ -45,9 +46,11 @@ MediaPicPreprocess;
  * 目标整幅先填 RGB 114,114,114，再把 src 缩进这块内容。像素保持 0–255。
  * dst 必须已经按目标宽高分配，格式是 RGB888。src 可以是 NV12 或 RGB888。
  * 两边不能是同一块缓冲。这里不跑模型，调用方再把 dst 交给 media_npu_run。
- * 1920×1080 放进 640×640：scale = 640/1920，内容 640×360，x_pad = 0，y_pad = 140。
+ * 1920×1080 放进 640×640：scale = 640/1920，内容 640×360，x_pad = 0，y_pad = 140。这些数已经是偶数，不再改。
  * 1080×1920 放进 640×640：左右各补 140，上下不补。目标不是正方形时，仍只补较短的两边。
- * out 可空。非空时写出这次的 scale 和灰边，后面映射框必须用这一份，不要另算。
+ * 奇怪尺寸先把内容宽高向下收到偶数，灰边再向上收到偶数。起点和边长因此都是偶数，缩放不会被硬件丢掉。
+ * 空隙只剩 1 像素、或目标边本身是奇数时，凑不出两侧都是偶数，这 1 像素留在右或下。
+ * out 可空。非空时写出对齐之后的 scale 和灰边，后面映射框必须用这一份，不要另算。
  * 内容不足 2 像素时返回 BASE_ERR，避免送出一张纯灰图。
  */
 BaseStatus media_pic_preprocess(const BaseImage *src, BaseImage *dst, MediaPicPreprocess *out);

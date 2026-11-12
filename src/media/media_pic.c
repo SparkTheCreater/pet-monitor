@@ -9,34 +9,72 @@
 /* 和 YOLO 训练时的补边灰一致，RGB 各 114。 */
 static const uint32_t kPreprocessGray = 0x00727272u;
 
+/* 内容先落到偶数。靠起点的灰边若是奇数，再缩短 2 像素，使它向上对齐到偶数。 */
+static int AlignAxis(int dst, int content, int *out_content, int *out_pad)
+{
+    int pad;
+    if (content > dst)
+    {
+        content = dst;
+    }
+    if (content >= 2)
+    {
+        content &= ~1;
+    }
+    if (content < 2)
+    {
+        return 0;
+    }
+    pad = (dst - content) / 2;
+    if ((pad & 1) != 0 && content >= 4)
+    {
+        content -= 2;
+        pad = (dst - content) / 2;
+    }
+    if (content < 2 || pad < 0)
+    {
+        return 0;
+    }
+    *out_content = content;
+    *out_pad = pad;
+    return 1;
+}
+
 static int Place(int src_w, int src_h, int dst_w, int dst_h, MediaPicPreprocess *out)
 {
     int content_w;
     int content_h;
+    int limit_w;
     if (src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0)
     {
         return 0;
     }
-    if ((int64_t)src_w * dst_h >= (int64_t)src_h * dst_w)
+    limit_w = (int64_t)src_w * dst_h >= (int64_t)src_h * dst_w;
+    if (limit_w)
     {
         content_w = dst_w;
         content_h = (int)(((int64_t)src_h * dst_w) / src_w);
-        out->scale = (float)dst_w / (float)src_w;
     }
     else
     {
         content_h = dst_h;
         content_w = (int)(((int64_t)src_w * dst_h) / src_h);
-        out->scale = (float)dst_h / (float)src_h;
     }
-    if (content_w < 2 || content_h < 2 || content_w > dst_w || content_h > dst_h)
+    if (!AlignAxis(dst_w, content_w, &content_w, &out->x_pad) ||
+        !AlignAxis(dst_h, content_h, &content_h, &out->y_pad))
     {
         return 0;
     }
     out->content_w = content_w;
     out->content_h = content_h;
-    out->x_pad = (dst_w - content_w) / 2;
-    out->y_pad = (dst_h - content_h) / 2;
+    if (limit_w)
+    {
+        out->scale = (float)content_w / (float)src_w;
+    }
+    else
+    {
+        out->scale = (float)content_h / (float)src_h;
+    }
     return 1;
 }
 

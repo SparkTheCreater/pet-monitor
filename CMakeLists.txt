@@ -60,12 +60,18 @@ add_library(media STATIC
     src/media/media_pic.c
     src/media/media_jpeg.c
     src/media/media_npu.c
+    src/media/media_ai.c
+    src/media/media_ai_detect.c
+    src/media/media_ai_track.c
+    src/media/media_ai_recog.c
 )
 target_include_directories(media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include)
 target_link_libraries(media PUBLIC plt)
 
-find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
+target_link_libraries(media PUBLIC Threads::Threads ${CMAKE_DL_LIBS})
+
+find_package(OpenSSL REQUIRED)
 
 add_library(app STATIC src/app/app_email.cpp)
 target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/app/include)
@@ -77,8 +83,16 @@ if(PM_PLATFORM STREQUAL "stub")
     target_link_libraries(plt_stub_test PRIVATE plt)
     add_test(NAME plt_stub_test COMMAND plt_stub_test)
 
+    add_library(media_ai_probe MODULE tests/media_ai_probe.c)
+    target_include_directories(media_ai_probe PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include
+    )
+
     add_executable(media_stub_test tests/media_stub_test.c)
     target_link_libraries(media_stub_test PRIVATE media)
+    target_compile_definitions(media_stub_test PRIVATE "MEDIA_AI_PLUGIN=\"$<TARGET_FILE:media_ai_probe>\"")
+    add_dependencies(media_stub_test media_ai_probe)
     add_test(NAME media_stub_test COMMAND media_stub_test)
 
     add_executable(app_email_test tests/app_email_test.c)

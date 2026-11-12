@@ -23,6 +23,10 @@ _Static_assert((int)MEDIA_NPU_QNT_NONE == (int)PLT_NPU_QNT_NONE, "qnt none");
 _Static_assert((int)MEDIA_NPU_QNT_DFP == (int)PLT_NPU_QNT_DFP, "qnt dfp");
 _Static_assert((int)MEDIA_NPU_QNT_AFFINE == (int)PLT_NPU_QNT_AFFINE, "qnt affine");
 _Static_assert((int)MEDIA_NPU_QNT_UNKNOWN == (int)PLT_NPU_QNT_UNKNOWN, "qnt");
+_Static_assert((int)MEDIA_NPU_FMT_NCHW == (int)PLT_NPU_FMT_NCHW, "fmt nchw");
+_Static_assert((int)MEDIA_NPU_FMT_NHWC == (int)PLT_NPU_FMT_NHWC, "fmt nhwc");
+_Static_assert((int)MEDIA_NPU_FMT_NC1HWC2 == (int)PLT_NPU_FMT_NC1HWC2, "fmt nc1hwc2");
+_Static_assert((int)MEDIA_NPU_FMT_UNKNOWN == (int)PLT_NPU_FMT_UNKNOWN, "fmt");
 
 struct MediaNpu
 {
@@ -45,8 +49,8 @@ static void CopyTensor(const PltNpuTensor *src, MediaNpuTensor *dst)
 
     memset(dst, 0, sizeof(*dst));
     dst->index = src->index;
-    dst->n_dims = src->n_dims;
-    n = src->n_dims;
+    dst->n_dims = src->nDims;
+    n = src->nDims;
     if (n > 16)
     {
         n = 16;
@@ -60,10 +64,12 @@ static void CopyTensor(const PltNpuTensor *src, MediaNpuTensor *dst)
         dst->dims[i] = src->dims[i];
     }
     dst->type = src->type;
-    dst->qnt_type = src->qnt_type;
+    dst->fmt = src->fmt;
+    dst->qnt_type = src->qntType;
+    dst->fl = src->fl;
     dst->zp = src->zp;
     dst->scale = src->scale;
-    dst->n_elems = src->n_elems;
+    dst->n_elems = src->nElems;
     dst->bytes = src->bytes;
 }
 

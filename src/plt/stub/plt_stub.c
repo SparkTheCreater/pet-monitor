@@ -175,9 +175,9 @@ BaseStatus plt_jpeg_decode(const uint8_t *data, size_t size, BaseImage *image)
     return BASE_ERR;
 }
 
-BaseStatus plt_npu_open(const char *model_path, PltNpu **out)
+BaseStatus plt_npu_open(const char* modelPath, PltNpu** out)
 {
-    (void)model_path;
+    (void)modelPath;
     if (out != NULL)
     {
         *out = NULL;
@@ -185,19 +185,19 @@ BaseStatus plt_npu_open(const char *model_path, PltNpu **out)
     return BASE_ERR;
 }
 
-void plt_npu_close(PltNpu *npu)
+void plt_npu_close(PltNpu* npu)
 {
     (void)npu;
 }
 
-BaseStatus plt_npu_set_core(PltNpu *npu, int core_mask)
+BaseStatus plt_npu_set_core(PltNpu* npu, int coreMask)
 {
     (void)npu;
-    (void)core_mask;
+    (void)coreMask;
     return BASE_ERR;
 }
 
-BaseStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info)
+BaseStatus plt_npu_input_info(PltNpu* npu, PltNpuTensor* info)
 {
     (void)npu;
     if (info != NULL)
@@ -207,7 +207,7 @@ BaseStatus plt_npu_input_info(PltNpu *npu, PltNpuTensor *info)
     return BASE_ERR;
 }
 
-BaseStatus plt_npu_output_count(PltNpu *npu, int *count)
+BaseStatus plt_npu_output_count(PltNpu* npu, int* count)
 {
     (void)npu;
     if (count != NULL)
@@ -217,7 +217,7 @@ BaseStatus plt_npu_output_count(PltNpu *npu, int *count)
     return BASE_ERR;
 }
 
-BaseStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info)
+BaseStatus plt_npu_output_info(PltNpu* npu, int index, PltNpuTensor* info)
 {
     (void)npu;
     (void)index;
@@ -228,7 +228,7 @@ BaseStatus plt_npu_output_info(PltNpu *npu, int index, PltNpuTensor *info)
     return BASE_ERR;
 }
 
-BaseStatus plt_npu_run(PltNpu *npu, const BaseImage *input, void *const *outputs, const size_t *bytes)
+BaseStatus plt_npu_run(PltNpu* npu, const BaseImage* input, void* const* outputs, const size_t* bytes)
 {
     (void)npu;
     (void)input;

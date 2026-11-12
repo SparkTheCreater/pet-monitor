@@ -134,6 +134,15 @@ void FillTensor(const rknn_tensor_attr* attr, PltNpuTensor* info)
     info->bytes = attr->size;
 }
 
+/* 板上的 1.5.2 头文件没有这个声明，运行库里有。 */
+typedef enum
+{
+    RKNN_NPU_CORE_AUTO = 0
+}
+rknn_core_mask;
+
+extern "C" int rknn_set_core_mask(rknn_context context, rknn_core_mask core_mask);
+
 int BindCore(rknn_context ctx, int mask)
 {
     return rknn_set_core_mask(ctx, (rknn_core_mask)mask);

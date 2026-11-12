@@ -35,6 +35,7 @@ if(PM_PLATFORM STREQUAL "rk3588")
         src/plt/rk3588/plt_venc.cpp
         src/plt/rk3588/plt_npu.cpp
     )
+    target_link_libraries(plt PUBLIC rknnrt rockchip_mpp rga)
     target_compile_definitions(plt PRIVATE RK_3588)
     target_include_directories(plt
         PUBLIC

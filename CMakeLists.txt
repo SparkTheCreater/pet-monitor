@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 set(PM_PLATFORM "stub" CACHE STRING "plt implementation: stub or rk3588")
 set_property(CACHE PM_PLATFORM PROPERTY STRINGS stub rk3588)
 if(NOT PM_PLATFORM STREQUAL "stub" AND NOT PM_PLATFORM STREQUAL "rk3588")
@@ -26,7 +28,7 @@ if(PM_PLATFORM STREQUAL "rk3588")
         message(FATAL_ERROR "rk3588 needs PM_MPP_INCLUDE, PM_RGA_INCLUDE and PM_RKNN_INCLUDE")
     endif()
 
-    add_library(plt STATIC
+    add_library(plt SHARED
         src/plt/rk3588/plt_sys.cpp
         src/plt/rk3588/plt_mem.cpp
         src/plt/rk3588/plt_vdec.cpp
@@ -47,13 +49,13 @@ if(PM_PLATFORM STREQUAL "rk3588")
             ${PM_RKNN_INCLUDE}
     )
 else()
-    add_library(plt STATIC src/plt/stub/plt_stub.c)
+    add_library(plt SHARED src/plt/stub/plt_stub.c)
     target_include_directories(plt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/include)
 endif()
 
 target_link_libraries(plt PUBLIC base)
 
-add_library(media STATIC
+add_library(media SHARED
     src/media/media_sys.c
     src/media/media_mem.c
     src/media/media_dec.c
@@ -99,4 +101,20 @@ if(PM_PLATFORM STREQUAL "stub")
     add_executable(app_email_test tests/app_email_test.c)
     target_link_libraries(app_email_test PRIVATE app)
     add_test(NAME app_email_test COMMAND app_email_test)
+endif()
+
+add_library(media_ai_cat_det MODULE src/media/media_ai_cat_det.c)
+target_include_directories(media_ai_cat_det PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/media/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include
+)
+target_link_libraries(media_ai_cat_det PRIVATE media)
+
+if(PM_PLATFORM STREQUAL "rk3588")
+    add_executable(media_ai_cat_demo tests/media_ai_cat_demo.c)
+    target_link_libraries(media_ai_cat_demo PRIVATE media)
+    target_compile_definitions(media_ai_cat_demo PRIVATE
+        "MEDIA_AI_CAT_DET_PLUGIN=\"$<TARGET_FILE:media_ai_cat_det>\""
+    )
+    add_dependencies(media_ai_cat_demo media_ai_cat_det)
 endif()

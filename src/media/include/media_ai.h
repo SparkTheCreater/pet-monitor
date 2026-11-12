@@ -14,12 +14,13 @@ extern "C"
 
 typedef struct MediaAi MediaAi;
 
-/* 内置算法。插件可以登记别的正整数。 */
+/* 内置算法从 0 起。插件可以登记别的正整数。MEDIA_AI_CAT_DET 留给猫检测插件。 */
 typedef enum
 {
     MEDIA_AI_DETECT = 0,
     MEDIA_AI_TRACK,
-    MEDIA_AI_RECOGNIZE
+    MEDIA_AI_RECOGNIZE,
+    MEDIA_AI_CAT_DET
 }
 MediaAiKind;
 

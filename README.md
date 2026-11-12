@@ -70,6 +70,8 @@ flowchart TD
 
 三种内置算法的结果各用各的结构。没有目标时检测和追踪仍回调，`count` 为 0。检测和追踪加载 `models/yolov5s-640-640.rknn`，输入是 640×640。
 
+猫检测是插件，种类号 `MEDIA_AI_CAT_DET`，名字 `cat_det`。进程链接 `libmedia.so` 后，`media_ai_load` 装入 `libmedia_ai_cat_det.so`，再 `media_ai_add(ai, MEDIA_AI_CAT_DET, "models/Catto.rknn")`。模型是 640×640 的 FP16，单个输出已经是框和分数。回调 buf 是 `MediaAiDetectResult`，类别是 `MEDIA_AI_CAT`。
+
 | 算法 | 预处理 | 推理之后 | 回调里的 buf |
 |---|---|---|---|
 | 检测 | 等比例缩放，短边两侧补灰 | 只留猫，框映回原图，最多 32 个 | `MediaAiDetectResult` |

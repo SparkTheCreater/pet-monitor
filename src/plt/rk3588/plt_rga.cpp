@@ -407,6 +407,108 @@ int SwappedSize(const BaseImage *src, const BaseImage *dst)
     return src->width == dst->height && src->height == dst->width;
 }
 
+BaseStatus ScaleSync(const BaseImage *src, const Span *src_span, BaseImage *dst, const Span *dst_span)
+{
+    RgaImage src_image;
+    RgaImage dst_image;
+    if (Import(src, &src_image) != BASE_OK || Import(dst, &dst_image) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    rga_buffer_t empty;
+    memset(&empty, 0, sizeof(empty));
+    im_rect empty_rect;
+    memset(&empty_rect, 0, sizeof(empty_rect));
+    const IM_STATUS status = improcess(src_image.buf,
+                                       dst_image.buf,
+                                       empty,
+                                       ToRect(src_span),
+                                       ToRect(dst_span),
+                                       empty_rect,
+                                       -1,
+                                       nullptr,
+                                       nullptr,
+                                       IM_SYNC);
+    return RgaOk(status) ? BASE_OK : BASE_ERR;
+}
+
+BaseStatus ConvertColor(const BaseImage *src, BaseImage *dst, int mode)
+{
+    RgaImage src_image;
+    RgaImage dst_image;
+    if (Import(src, &src_image) != BASE_OK || Import(dst, &dst_image) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    const IM_STATUS status = imcvtcolor(src_image.buf,
+                                        dst_image.buf,
+                                        RgaFormat(src->format),
+                                        RgaFormat(dst->format),
+                                        mode,
+                                        1);
+    return RgaOk(status) ? BASE_OK : BASE_ERR;
+}
+
+/* 转色标志和旋转标志的低位冲突。先同尺寸转色，再只做缩放。 */
+BaseStatus BlitColor(const BaseImage *src, const Span *src_span, BaseImage *dst, const Span *dst_span)
+{
+    BaseImage temp;
+    BaseImage src_even;
+    Span span;
+    memset(&temp, 0, sizeof(temp));
+    temp.fd = -1;
+    src_even = *src;
+    span = *src_span;
+    if (IsYuv(src->format))
+    {
+        if (src_even.width & 1)
+        {
+            src_even.width -= 1;
+        }
+        if (src_even.height & 1)
+        {
+            src_even.height -= 1;
+        }
+        if (span.x + span.w > src_even.width)
+        {
+            span.w = src_even.width - span.x;
+        }
+        if (span.y + span.h > src_even.height)
+        {
+            span.h = src_even.height - span.y;
+        }
+        if (span.w & 1)
+        {
+            span.w -= 1;
+        }
+        if (span.h & 1)
+        {
+            span.h -= 1;
+        }
+    }
+    if (IsYuv(src->format))
+    {
+        if (plt_mem_alloc(src_even.width, src_even.height, BASE_PIX_RGB888, &temp) != BASE_OK)
+        {
+            return BASE_ERR;
+        }
+        const int mode = src->range == BASE_RANGE_FULL ? IM_YUV_TO_RGB_BT601_FULL : IM_YUV_TO_RGB_BT601_LIMIT;
+        const BaseStatus converted = ConvertColor(&src_even, &temp, mode);
+        const BaseStatus scaled = converted == BASE_OK ? ScaleSync(&temp, &span, dst, dst_span) : BASE_ERR;
+        plt_mem_free(&temp);
+        return scaled;
+    }
+    if (plt_mem_alloc(dst->width, dst->height, BASE_PIX_RGB888, &temp) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    const int mode = dst->range == BASE_RANGE_FULL ? IM_RGB_TO_YUV_BT601_FULL : IM_RGB_TO_YUV_BT601_LIMIT;
+    const BaseStatus scaled = ScaleSync(src, src_span, &temp, dst_span);
+    const BaseStatus converted = scaled == BASE_OK ? ConvertColor(&temp, dst, mode) : BASE_ERR;
+    plt_mem_free(&temp);
+    return converted;
+}
+
 }
 
 extern "C" BaseStatus plt_rga_blit(const BaseImage *src, const BaseRect *src_rect, BaseImage *dst, const BaseRect *dst_rect)
@@ -450,6 +552,10 @@ extern "C" BaseStatus plt_rga_blit(const BaseImage *src, const BaseRect *src_rec
     {
         return BASE_OK;
     }
+    if (IsYuv(src->format) != IsYuv(dst->format))
+    {
+        return BlitColor(src, &src_span, dst, &dst_span);
+    }
 
     RgaImage src_image;
     RgaImage dst_image;
@@ -460,15 +566,7 @@ extern "C" BaseStatus plt_rga_blit(const BaseImage *src, const BaseRect *src_rec
     }
 
     int usage = IM_SYNC;
-    if (IsYuv(src->format) && !IsYuv(dst->format))
-    {
-        usage |= src->range == BASE_RANGE_FULL ? IM_YUV_TO_RGB_BT601_FULL : IM_YUV_TO_RGB_BT601_LIMIT;
-    }
-    else if (!IsYuv(src->format) && IsYuv(dst->format))
-    {
-        usage |= dst->range == BASE_RANGE_FULL ? IM_RGB_TO_YUV_BT601_FULL : IM_RGB_TO_YUV_BT601_LIMIT;
-    }
-    else if (IsYuv(src->format) && IsYuv(dst->format) && src->range != dst->range)
+    if (IsYuv(src->format) && IsYuv(dst->format) && src->range != dst->range)
     {
 #ifdef RK_3588
         return ExpandRange(src, dst);

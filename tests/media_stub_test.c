@@ -77,6 +77,7 @@ int main(void)
     Expect(media_jpeg_decode(NULL, 0, NULL) == BASE_ERR, "jpeg decode null");
 
     Expect(media_pic_scale(NULL, NULL, NULL, NULL) == BASE_ERR, "scale");
+    Expect(media_pic_preprocess(NULL, NULL, NULL) == BASE_ERR, "preprocess");
     Expect(media_pic_line(NULL, 0, 0, 10, 2, 1, 0) == BASE_ERR, "line");
     Expect(media_pic_box(NULL, NULL, 0, 0, 2) == BASE_ERR, "box");
     Expect(media_pic_fill(NULL, NULL, 0) == BASE_ERR, "fill");

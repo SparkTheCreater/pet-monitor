@@ -83,9 +83,15 @@ target_link_libraries(algo PUBLIC media Threads::Threads ${CMAKE_DL_LIBS})
 
 find_package(OpenSSL REQUIRED)
 
-add_library(app STATIC src/app/app_email.cpp)
+add_library(app STATIC
+    src/app/app_email.cpp
+    src/app/app_cfg.c
+)
 target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/app/include)
-target_link_libraries(app PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+target_link_libraries(app
+    PUBLIC base
+    PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads
+)
 
 if(PM_PLATFORM STREQUAL "stub")
     enable_testing()
@@ -113,6 +119,11 @@ if(PM_PLATFORM STREQUAL "stub")
     add_executable(app_email_test tests/app_email_test.c)
     target_link_libraries(app_email_test PRIVATE app)
     add_test(NAME app_email_test COMMAND app_email_test)
+
+    add_executable(ini_test tests/ini_test.c)
+    target_link_libraries(ini_test PRIVATE base media algo app)
+    target_compile_definitions(ini_test PRIVATE "PM_INI_SAMPLE=\"${CMAKE_SOURCE_DIR}/conf/pet-monitor.ini\"")
+    add_test(NAME ini_test COMMAND ini_test)
 endif()
 
 if(PM_PLATFORM STREQUAL "rk3588")

@@ -76,6 +76,7 @@ add_library(algo SHARED
     src/algo/algo_track.c
     src/algo/algo_recog.c
     src/algo/algo_cat_det.c
+    src/algo/algo_cfg.c
 )
 target_include_directories(algo PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/algo/include)
 target_link_libraries(algo PUBLIC media Threads::Threads ${CMAKE_DL_LIBS})

@@ -74,3 +74,24 @@ BaseStatus algo_cfg_from_ini(const BaseIni *ini, AlgoConfig *out)
     *out = cfg;
     return BASE_OK;
 }
+
+const char *algo_cfg_model(const AlgoConfig *cfg, int kind)
+{
+    if (cfg == NULL)
+    {
+        return NULL;
+    }
+    if (kind == ALGO_DETECT)
+    {
+        return cfg->detect_model;
+    }
+    if (kind == ALGO_TRACK)
+    {
+        return cfg->track_model;
+    }
+    if (kind == ALGO_CAT_DET)
+    {
+        return cfg->cat_model;
+    }
+    return NULL;
+}

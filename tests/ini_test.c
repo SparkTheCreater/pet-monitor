@@ -219,6 +219,8 @@ static void TestLayers(void)
     ExpectStr(algo.detect_model, "models/yolov5s-640-640.rknn", "detect model");
     ExpectStr(algo.track_model, "models/yolov5s-640-640.rknn", "track model");
     ExpectStr(algo.cat_model, "models/Catto.rknn", "cat model");
+    ExpectStr(algo_cfg_model(&algo, ALGO_CAT_DET), "models/Catto.rknn", "cat model get");
+    ExpectStr(algo_cfg_model(&algo, ALGO_DETECT), "models/yolov5s-640-640.rknn", "detect model get");
     ExpectNear(algo.score_min, 0.25f, "score");
     ExpectNear(algo.nms_iou, 0.45f, "nms");
     ExpectInt(algo.open.queue_depth, 2, "queue");
@@ -232,6 +234,10 @@ static void TestLayers(void)
     ExpectStr(app.camera[0].url, "rtsp://192.168.1.20:554/stream1", "food url");
     ExpectInt(app.camera[0].place, APP_PLACE_EAT, "food place");
     ExpectInt(app.camera[0].timeout_ms, 5000, "food timeout");
+    ExpectInt(app_cfg_camera_algo(&app.camera[0]), ALGO_CAT_DET, "food algo");
+    ExpectNear(app_cfg_camera_score(&app.camera[0]), 0.25f, "food score");
+    ExpectInt(app_cfg_camera_algo(&app.camera[1]), ALGO_CAT_DET, "litter algo");
+    ExpectNear(app_cfg_camera_score(&app.camera[1]), 0.25f, "litter score");
     ExpectStr(app.camera[1].name, "litter", "litter name");
     ExpectStr(app.camera[1].url, "rtsp://192.168.1.21:554/stream1", "litter url");
     ExpectInt(app.camera[1].place, APP_PLACE_LITTER, "litter place");
@@ -239,6 +245,9 @@ static void TestLayers(void)
     ExpectInt(app.eat_sec, 3, "eat");
     ExpectInt(app.litter_sec, 5, "litter sec");
     ExpectInt(app.clip_sec, 10, "clip");
+    ExpectInt(app.present_sec, 20, "present");
+    ExpectInt(app.shot_sec, 10, "shot");
+    ExpectInt(app.absent_sec, 20, "absent");
     ExpectInt(app.email_enable, 0, "mail off");
     ExpectStr(app.host, "smtp.qq.com", "host");
     ExpectStr(app.user, "", "user");
@@ -265,6 +274,9 @@ static void TestLayers(void)
     ExpectStatus(app_cfg_from_ini(empty, &app), BASE_OK, "app default");
     ExpectInt(app.camera_count, 0, "no camera");
     ExpectStr(app.dir, "/opt/pet-monitor", "default dir");
+    ExpectInt(app.present_sec, 20, "default present");
+    ExpectInt(app.shot_sec, 10, "default shot");
+    ExpectInt(app.absent_sec, 20, "default absent");
     base_ini_free(empty);
 
     ini = base_ini_parse(
@@ -284,9 +296,11 @@ static void TestLayers(void)
         "[camera.bowl]\n"
         "url = rtsp://only\n"
         "place = EAT\n"
+        "score_min = 0.6\n"
         "[camera.box]\n"
         "url = rtsp://box\n"
         "place = litter\n"
+        "algo = detect\n"
         "timeout_ms = 8000\n"
         "[email]\n"
         "enable = true\n"
@@ -313,6 +327,10 @@ static void TestLayers(void)
     ExpectInt(app.camera_count, 2, "two cameras");
     ExpectStr(app.camera[0].name, "bowl", "bowl");
     ExpectInt(app.camera[0].place, APP_PLACE_EAT, "bowl place");
+    ExpectInt(app_cfg_camera_algo(&app.camera[0]), ALGO_CAT_DET, "bowl algo");
+    ExpectNear(app_cfg_camera_score(&app.camera[0]), 0.6f, "bowl score");
+    ExpectInt(app_cfg_camera_algo(&app.camera[1]), ALGO_DETECT, "box algo");
+    ExpectNear(app_cfg_camera_score(&app.camera[1]), 0.5f, "box score");
     ExpectInt(app.camera[0].timeout_ms, 5000, "inherited timeout");
     ExpectInt(app.camera[1].timeout_ms, 8000, "own timeout");
     ExpectStr(app.password, "a;b c", "mail password");
@@ -329,6 +347,24 @@ static void TestLayers(void)
     memcpy(&media, media_fill, sizeof(media));
     ExpectStatus(media_cfg_from_ini(ini, &media), BASE_ERR, "bad qp");
     ExpectUntouched(0x5a, (unsigned char *)&media, "bad qp out");
+    base_ini_free(ini);
+
+    ini = base_ini_parse("[camera.food]\nurl = rtsp://cam\nplace = eat\nalgo = bird\n");
+    memset(&app, 0x5a, sizeof(app));
+    ExpectStatus(app_cfg_from_ini(ini, &app), BASE_ERR, "bad algo");
+    ExpectUntouched(0x5a, (unsigned char *)&app, "algo out");
+    base_ini_free(ini);
+
+    ini = base_ini_parse("[camera.food]\nurl = rtsp://cam\nplace = eat\nscore_min = 1.5\n");
+    memset(&app, 0x5a, sizeof(app));
+    ExpectStatus(app_cfg_from_ini(ini, &app), BASE_ERR, "bad score");
+    ExpectUntouched(0x5a, (unsigned char *)&app, "score out");
+    base_ini_free(ini);
+
+    ini = base_ini_parse("[event]\npresent_sec = 10\nshot_sec = 10\nabsent_sec = 20\n");
+    memset(&app, 0x5a, sizeof(app));
+    ExpectStatus(app_cfg_from_ini(ini, &app), BASE_ERR, "shot not before present");
+    ExpectUntouched(0x5a, (unsigned char *)&app, "shot out");
     base_ini_free(ini);
 
     ini = base_ini_parse("[email]\nenable = true\n");

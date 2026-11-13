@@ -43,6 +43,7 @@ typedef struct
     BaseImage canvas;
     const BaseImage *frame;
     MediaPicPreprocess prep;
+    float score_min;
 }
 CatDet;
 
@@ -291,6 +292,11 @@ static BaseStatus Open(const char *model_path, const AlgoOpenParam *param, void 
         Release(det);
         return BASE_ERR;
     }
+    det->score_min = kScoreMin;
+    if (param != NULL && param->score_min > 0.0f && param->score_min <= 1.0f)
+    {
+        det->score_min = param->score_min;
+    }
     if (media_npu_input_info(det->npu, &input) != BASE_OK || !InputSize(&input, &det->model_w, &det->model_h))
     {
         Release(det);
@@ -381,7 +387,7 @@ static int Collect(const CatDet *det, Cand *cand, int cap)
         bw = At(det, row, 2);
         bh = At(det, row, 3);
         score = At(det, row, 4) * At(det, row, 5);
-        if (score < kScoreMin || bw <= 0.0f || bh <= 0.0f)
+        if (score < det->score_min || bw <= 0.0f || bh <= 0.0f)
         {
             continue;
         }
@@ -441,7 +447,7 @@ static BaseStatus Postprocess(void *impl, void *buf, int buf_size)
     for (i = 0; i < n && written < ALGO_MAX; ++i)
     {
         BaseRect box;
-        if (det->cand[i].score < kScoreMin)
+        if (det->cand[i].score < det->score_min)
         {
             continue;
         }

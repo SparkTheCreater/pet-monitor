@@ -98,12 +98,22 @@ find_package(OpenSSL REQUIRED)
 add_library(app STATIC
     src/app/app_email.cpp
     src/app/app_cfg.c
+    src/app/app_watch.c
+    src/app/app_mark.c
+    src/app/app_mail.c
+    src/app/app_run.c
 )
 target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/app/include)
 target_link_libraries(app
     PUBLIC base
-    PRIVATE OpenSSL::SSL OpenSSL::Crypto Threads::Threads
+    PRIVATE net media algo OpenSSL::SSL OpenSSL::Crypto Threads::Threads
 )
+
+add_executable(app_watch_test tests/app_watch_test.c)
+target_link_libraries(app_watch_test PRIVATE app)
+
+add_executable(app_mark_test tests/app_mark_test.c)
+target_link_libraries(app_mark_test PRIVATE app algo)
 
 if(PM_PLATFORM STREQUAL "stub")
     enable_testing()
@@ -146,4 +156,7 @@ endif()
 if(PM_PLATFORM STREQUAL "rk3588")
     add_executable(algo_cat_demo tests/algo_cat_demo.c)
     target_link_libraries(algo_cat_demo PRIVATE algo)
+
+    add_executable(pet-monitor src/app/main.c)
+    target_link_libraries(pet-monitor PRIVATE app)
 endif()

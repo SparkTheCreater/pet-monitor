@@ -6,6 +6,33 @@
 
 #include <string.h>
 
+static int Eq(const char *a, const char *b);
+
+static BaseStatus AlgoOf(const char *text, int *out)
+{
+    if (text == NULL || text[0] == '\0' || Eq(text, "cat"))
+    {
+        *out = ALGO_CAT_DET;
+        return BASE_OK;
+    }
+    if (Eq(text, "detect"))
+    {
+        *out = ALGO_DETECT;
+        return BASE_OK;
+    }
+    if (Eq(text, "track"))
+    {
+        *out = ALGO_TRACK;
+        return BASE_OK;
+    }
+    if (Eq(text, "recognize"))
+    {
+        *out = ALGO_RECOGNIZE;
+        return BASE_OK;
+    }
+    return BASE_ERR;
+}
+
 static char Lower(char c)
 {
     if (c >= 'A' && c <= 'Z')
@@ -76,7 +103,29 @@ static BaseStatus PlaceOf(const char *text, int *out)
     return BASE_ERR;
 }
 
-static BaseStatus OneCamera(const BaseIni *ini, const char *section, int shared_timeout, AppCamera *cam)
+static BaseStatus ScoreOf(const BaseIni *ini, const char *section, double fallback, float *out)
+{
+    double score;
+    if (base_ini_has(ini, section, "score_min"))
+    {
+        if (base_ini_real(ini, section, "score_min", fallback, &score) != BASE_OK)
+        {
+            return BASE_ERR;
+        }
+    }
+    else
+    {
+        score = fallback;
+    }
+    if (score <= 0.0 || score > 1.0)
+    {
+        return BASE_ERR;
+    }
+    *out = (float)score;
+    return BASE_OK;
+}
+
+static BaseStatus OneCamera(const BaseIni *ini, const char *section, int shared_timeout, double score, AppCamera *cam)
 {
     memset(cam, 0, sizeof(*cam));
     if (CameraName(section, cam->name, sizeof(cam->name)) != BASE_OK)
@@ -110,16 +159,25 @@ static BaseStatus OneCamera(const BaseIni *ini, const char *section, int shared_
     {
         return BASE_ERR;
     }
-    return BASE_OK;
+    if (AlgoOf(base_ini_str(ini, section, "algo", "cat"), &cam->algo) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    return ScoreOf(ini, section, score, &cam->score_min);
 }
 
 static BaseStatus Cameras(const BaseIni *ini, AppConfig *cfg)
 {
     const char *name[APP_CAMERA_MAX];
     int shared = 5000;
+    double score = 0.25;
     int n;
     int i;
     if (base_ini_int(ini, "camera", "timeout_ms", 5000, &shared) != BASE_OK || shared <= 0)
+    {
+        return BASE_ERR;
+    }
+    if (base_ini_real(ini, "algo", "score_min", 0.25, &score) != BASE_OK || score <= 0.0 || score > 1.0)
     {
         return BASE_ERR;
     }
@@ -130,7 +188,7 @@ static BaseStatus Cameras(const BaseIni *ini, AppConfig *cfg)
     }
     for (i = 0; i < n; i++)
     {
-        if (OneCamera(ini, name[i], shared, &cfg->camera[i]) != BASE_OK)
+        if (OneCamera(ini, name[i], shared, score, &cfg->camera[i]) != BASE_OK)
         {
             return BASE_ERR;
         }
@@ -228,7 +286,11 @@ BaseStatus app_cfg_from_ini(const BaseIni *ini, AppConfig *out)
     }
     if (Positive(ini, "eat_sec", 3, &cfg.eat_sec) != BASE_OK ||
         Positive(ini, "litter_sec", 5, &cfg.litter_sec) != BASE_OK ||
-        Positive(ini, "clip_sec", 10, &cfg.clip_sec) != BASE_OK)
+        Positive(ini, "clip_sec", 10, &cfg.clip_sec) != BASE_OK ||
+        Positive(ini, "present_sec", 20, &cfg.present_sec) != BASE_OK ||
+        Positive(ini, "shot_sec", 10, &cfg.shot_sec) != BASE_OK ||
+        Positive(ini, "absent_sec", 20, &cfg.absent_sec) != BASE_OK ||
+        cfg.shot_sec >= cfg.present_sec)
     {
         return BASE_ERR;
     }
@@ -239,4 +301,22 @@ BaseStatus app_cfg_from_ini(const BaseIni *ini, AppConfig *out)
     *out = cfg;
     Wire(out);
     return BASE_OK;
+}
+
+int app_cfg_camera_algo(const AppCamera *camera)
+{
+    if (camera == NULL)
+    {
+        return ALGO_CAT_DET;
+    }
+    return camera->algo;
+}
+
+float app_cfg_camera_score(const AppCamera *camera)
+{
+    if (camera == NULL)
+    {
+        return 0.25f;
+    }
+    return camera->score_min;
 }

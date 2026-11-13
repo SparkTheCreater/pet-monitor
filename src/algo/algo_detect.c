@@ -59,6 +59,7 @@ struct AiDetect
     BaseImage canvas;
     const BaseImage *frame;
     MediaPicPreprocess prep;
+    float score_min;
 };
 
 static int TypeOf(int coco)
@@ -384,6 +385,11 @@ BaseStatus ai_detect_open(const char *model_path, const AlgoOpenParam *param, Ai
         Release(det);
         return BASE_ERR;
     }
+    det->score_min = kScoreMin;
+    if (param != NULL && param->score_min > 0.0f && param->score_min <= 1.0f)
+    {
+        det->score_min = param->score_min;
+    }
     if (media_npu_input_info(det->npu, &input) != BASE_OK || !InputSize(&input, &det->model_w, &det->model_h))
     {
         Release(det);
@@ -504,7 +510,7 @@ BaseStatus ai_detect_postprocess(AiDetect *det, AlgoBox *boxes, int capacity, in
     n = 0;
     for (i = 0; i < det->n_head; ++i)
     {
-        n = DecodeHead(&det->head[i], det->buf[i], want, kScoreMin, det->cand, det->cand_cap, n);
+        n = DecodeHead(&det->head[i], det->buf[i], want, det->score_min, det->cand, det->cand_cap, n);
     }
     if (n > 1)
     {
@@ -534,7 +540,7 @@ BaseStatus ai_detect_postprocess(AiDetect *det, AlgoBox *boxes, int capacity, in
     for (i = 0; i < keep && written < capacity; ++i)
     {
         BaseRect box;
-        if (det->cand[i].score < kScoreMin)
+        if (det->cand[i].score < det->score_min)
         {
             continue;
         }

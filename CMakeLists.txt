@@ -17,8 +17,8 @@ if(NOT PM_PLATFORM STREQUAL "stub" AND NOT PM_PLATFORM STREQUAL "rk3588")
     message(FATAL_ERROR "PM_PLATFORM must be stub or rk3588")
 endif()
 
-add_library(base INTERFACE)
-target_include_directories(base INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include)
+add_library(base SHARED src/base/ini.c)
+target_include_directories(base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/base/include)
 
 if(PM_PLATFORM STREQUAL "rk3588")
     set(PM_MPP_INCLUDE "" CACHE PATH "MPP headers")

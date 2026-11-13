@@ -69,6 +69,18 @@ target_include_directories(media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/media/in
 target_link_libraries(media PUBLIC plt)
 
 find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET libavformat libavcodec libavutil)
+
+add_library(net SHARED
+    src/net/net_cfg.c
+    src/net/net_pull.c
+)
+target_include_directories(net PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/net/include)
+target_link_libraries(net
+    PUBLIC base
+    PRIVATE PkgConfig::FFMPEG Threads::Threads
+)
 
 add_library(algo SHARED
     src/algo/algo.c
@@ -119,6 +131,11 @@ if(PM_PLATFORM STREQUAL "stub")
     add_executable(app_email_test tests/app_email_test.c)
     target_link_libraries(app_email_test PRIVATE app)
     add_test(NAME app_email_test COMMAND app_email_test)
+
+    add_executable(net_test tests/net_test.c)
+    target_link_libraries(net_test PRIVATE net)
+    target_compile_definitions(net_test PRIVATE "PM_INI_SAMPLE=\"${CMAKE_SOURCE_DIR}/conf/pet-monitor.ini\"")
+    add_test(NAME net_test COMMAND net_test)
 
     add_executable(ini_test tests/ini_test.c)
     target_link_libraries(ini_test PRIVATE base media algo app)

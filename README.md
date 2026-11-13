@@ -22,6 +22,14 @@
 
 `plt_rga_*` 是二维引擎，名字是历史留下的。上层用 `media_pic`，不直接调用它。
 
+## 网络
+
+拉流在 `net`。头文件是 `net_cfg.h` 和 `net_pull.h`。这一层只包含 `base`，FFmpeg 的类型不出公开头。
+
+`net_cfg_from_ini` 读 `[camera]` 的超时和传输方式，以及每一路 `[camera.名字]` 的 `url`。不读 `place`。`url` 要以 `rtsp://` 开头。传输方式缺省是 tcp。
+
+`net_open` 连接一路。`net_info` 给出编码、宽高和参数集，参数集保持到 `net_close`。`net_read` 在调用方线程上阻塞，直到交出一帧 Annex B。这一帧保持到下一次读或关闭。断开返回失败，不在这里重连。`net_close` 可以从另一线程打断正在读的那一次。
+
 ## 媒体层
 
 媒体层放基础图像接口，目录是 `src/media`。库名是 `media`。用其它媒体接口之前先 `media_init`，用完 `media_deinit`。

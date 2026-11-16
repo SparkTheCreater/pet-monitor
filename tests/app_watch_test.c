@@ -115,11 +115,52 @@ static void TestMissedShot(void)
     Expect(!ev.send && !ev.keep && watch.phase == APP_WATCH_IDLE, "no picture no mail");
 }
 
+static AppVerdict JudgeAt(AppWatchJudge *judge, int64_t now, int has_cat)
+{
+    AppFact fact;
+    AppVerdict verdict;
+    memset(&fact, 0, sizeof(fact));
+    fact.now_ms = now;
+    fact.has_cat = has_cat;
+    app_watch_judge(&fact, judge, &verdict);
+    return verdict;
+}
+
+static void TestJudge(void)
+{
+    AppWatch watch;
+    AppWatchJudge judge;
+    AppWatchEvent ev;
+    AppVerdict verdict;
+    int64_t now[6] = {0, 10000, 15000, 15000, 25000, 35000};
+    int cat[6] = {1, 1, 0, 1, 1, 1};
+    int i;
+    memset(&judge, 0, sizeof(judge));
+    judge.param.present_sec = 20;
+    judge.param.shot_sec = 10;
+    judge.param.absent_sec = 20;
+    app_watch_reset(&watch);
+    app_watch_judge_reset(&judge);
+    for (i = 0; i < 6; i++)
+    {
+        ev = Step(&watch, now[i], cat[i]);
+        verdict = JudgeAt(&judge, now[i], cat[i]);
+        Expect(verdict.keep == ev.keep && verdict.send == ev.send && verdict.drop == ev.drop, "judge matches");
+        if (ev.keep)
+        {
+            app_watch_kept(&watch);
+            app_watch_judge_kept(&judge);
+        }
+    }
+    Expect(judge.watch.phase == watch.phase && judge.watch.held == watch.held, "judge state");
+}
+
 int main(void)
 {
     TestCycle();
     TestBreak();
     TestAbsentReset();
     TestMissedShot();
+    TestJudge();
     return g_failed == 0 ? 0 : 1;
 }

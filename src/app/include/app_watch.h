@@ -2,13 +2,13 @@
  * @file    app_watch.h
  * @brief   一路相机上的猫：出现够久发一次，消失够久才允许下一次。
  *
- * 不读图，也不发信。调用方按事件自己留 JPEG、丢掉或交出去。
+ * 不读图，也不发信。app_watch_judge 是默认判断函数，状态放在 user 里。
  * now_ms 用单调时钟。有猫是这一拍的结论，中间没采样到的时间不算中断。
  */
 #ifndef APP_WATCH_H
 #define APP_WATCH_H
 
-#include <stdint.h>
+#include "app_judge.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -60,6 +60,19 @@ void app_watch_reset(AppWatch *watch);
 void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms, int has_cat, AppWatchEvent *ev);
 
 void app_watch_kept(AppWatch *watch);
+
+typedef struct AppWatchJudge
+{
+    AppWatch watch;
+    AppWatchParam param;
+}
+AppWatchJudge;
+
+void app_watch_judge(const AppFact *fact, void *user, AppVerdict *out);
+
+void app_watch_judge_kept(void *user);
+
+void app_watch_judge_reset(void *user);
 
 #ifdef __cplusplus
 }

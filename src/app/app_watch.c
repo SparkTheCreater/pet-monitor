@@ -29,6 +29,46 @@ void app_watch_kept(AppWatch *watch)
     }
 }
 
+void app_watch_judge(const AppFact *fact, void *user, AppVerdict *out)
+{
+    AppWatchJudge *judge;
+    AppWatchEvent ev;
+    if (out == NULL)
+    {
+        return;
+    }
+    memset(out, 0, sizeof(*out));
+    judge = user;
+    if (fact == NULL || judge == NULL)
+    {
+        return;
+    }
+    app_watch_step(&judge->watch, &judge->param, fact->now_ms, fact->has_cat, &ev);
+    out->keep = ev.keep;
+    out->drop = ev.drop;
+    out->send = ev.send;
+}
+
+void app_watch_judge_kept(void *user)
+{
+    AppWatchJudge *judge = user;
+    if (judge == NULL)
+    {
+        return;
+    }
+    app_watch_kept(&judge->watch);
+}
+
+void app_watch_judge_reset(void *user)
+{
+    AppWatchJudge *judge = user;
+    if (judge == NULL)
+    {
+        return;
+    }
+    app_watch_reset(&judge->watch);
+}
+
 static void ToIdle(AppWatch *watch)
 {
     watch->phase = APP_WATCH_IDLE;

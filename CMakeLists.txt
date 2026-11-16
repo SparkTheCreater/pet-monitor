@@ -99,6 +99,7 @@ add_library(app STATIC
     src/app/app_email.cpp
     src/app/app_cfg.c
     src/app/app_watch.c
+    src/app/app_act.c
     src/app/app_mark.c
     src/app/app_mail.c
     src/app/app_run.c
@@ -111,6 +112,9 @@ target_link_libraries(app
 
 add_executable(app_watch_test tests/app_watch_test.c)
 target_link_libraries(app_watch_test PRIVATE app)
+
+add_executable(app_act_test tests/app_act_test.c)
+target_link_libraries(app_act_test PRIVATE app algo media)
 
 add_executable(app_mark_test tests/app_mark_test.c)
 target_link_libraries(app_mark_test PRIVATE app algo)

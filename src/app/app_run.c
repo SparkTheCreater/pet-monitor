@@ -1,6 +1,6 @@
 /**
  * @file    app_run.c
- * @brief   一路相机一条线程。判断在本线程，发信只交队列。
+ * @brief   一路相机一条线程。判断函数给出要不要做，执行函数为真才做。
  */
 #define _POSIX_C_SOURCE 200809L
 
@@ -8,15 +8,14 @@
 
 #include "algo.h"
 #include "algo_cfg.h"
+#include "app_act.h"
 #include "app_cfg.h"
 #include "app_mail.h"
-#include "app_mark.h"
 #include "app_watch.h"
 #include "base_path.h"
 #include "media_cfg.h"
 #include "media_dec.h"
 #include "media_jpeg.h"
-#include "media_mem.h"
 #include "media_sys.h"
 #include "net_cfg.h"
 #include "net_pull.h"
@@ -32,6 +31,10 @@
 static const int kCoreMask[3] = {1, 2, 4};
 
 static atomic_int g_stop;
+static AppRunJudge g_judge;
+static int g_judge_on;
+static AppRunAct g_act;
+static int g_act_on;
 
 typedef struct
 {
@@ -53,6 +56,14 @@ typedef struct
     const AlgoConfig *algo;
     int jpeg_quality;
     AppMail *mail;
+    AppWatchJudge stay;
+    AppJudgeFn judge;
+    void *judge_user;
+    AppJudgeKeptFn kept;
+    void *kept_user;
+    void (*reset)(void *user);
+    AppActFn act;
+    void *act_user;
     pthread_mutex_t mu;
     NetPull *pull;
     pthread_t thread;
@@ -146,51 +157,29 @@ static int Infer(Algo *ai, InferWait *wait, const BaseImage *frame, AlgoDetectRe
     return -1;
 }
 
-static void Apply(Lane *lane, AppWatch *watch, uint8_t **jpeg, size_t *jpeg_len, const AppWatchEvent *ev, BaseImage *frame, const AlgoDetectResult *result)
+static void Act(Lane *lane, const AppFact *fact, const AppVerdict *verdict, BaseImage *frame, uint8_t **jpeg, size_t *jpeg_len)
 {
-    uint8_t *encoded;
-    size_t encoded_len;
-    if (ev->drop)
+    AppShot shot;
+    if (lane->act == NULL)
     {
-        media_jpeg_free(*jpeg);
-        *jpeg = NULL;
-        *jpeg_len = 0;
+        return;
     }
-    if (ev->keep)
-    {
-        BaseImage marked;
-        encoded = NULL;
-        encoded_len = 0;
-        memset(&marked, 0, sizeof(marked));
-        marked.fd = -1;
-        if (app_mark_cats(frame, result, &marked) == BASE_OK &&
-            media_jpeg_encode(&marked, lane->jpeg_quality, &encoded, &encoded_len) == BASE_OK)
-        {
-            media_jpeg_free(*jpeg);
-            *jpeg = encoded;
-            *jpeg_len = encoded_len;
-            app_watch_kept(watch);
-        }
-        media_mem_free(&marked);
-    }
-    if (ev->send && *jpeg != NULL)
-    {
-        fprintf(stderr, "[app] %s latched\n", lane->camera->name);
-        if (app_mail_post(lane->mail, lane->camera->name, *jpeg, *jpeg_len) != BASE_OK)
-        {
-            *jpeg = NULL;
-            *jpeg_len = 0;
-            return;
-        }
-        *jpeg = NULL;
-        *jpeg_len = 0;
-    }
+    memset(&shot, 0, sizeof(shot));
+    shot.fact = fact;
+    shot.frame = frame;
+    shot.jpeg = jpeg;
+    shot.jpeg_len = jpeg_len;
+    shot.jpeg_quality = lane->jpeg_quality;
+    shot.kept = lane->kept;
+    shot.kept_user = lane->kept_user;
+    shot.mail = lane->mail;
+    lane->act(&shot, verdict, lane->act_user);
 }
 
-static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, AppWatch *watch, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len, BaseDecodedFrame *frame)
+static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len, BaseDecodedFrame *frame)
 {
-    AppWatchEvent ev;
-    AppWatchParam param;
+    AppFact fact;
+    AppVerdict verdict;
     AlgoDetectResult result;
     int rc;
     if (frame->eos || frame->image.ptr == NULL || frame->image.width <= 0)
@@ -199,13 +188,16 @@ static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, AppWatch *watch, Medi
     }
     memset(&result, 0, sizeof(result));
     rc = Infer(ai, wait, &frame->image, &result);
-    if (rc == 0)
+    if (rc == 0 && lane->judge != NULL)
     {
-        param.present_sec = lane->cfg->present_sec;
-        param.shot_sec = lane->cfg->shot_sec;
-        param.absent_sec = lane->cfg->absent_sec;
-        app_watch_step(watch, &param, NowMs(), result.count > 0, &ev);
-        Apply(lane, watch, jpeg, jpeg_len, &ev, &frame->image, &result);
+        memset(&fact, 0, sizeof(fact));
+        memset(&verdict, 0, sizeof(verdict));
+        fact.now_ms = NowMs();
+        fact.has_cat = result.count > 0;
+        fact.camera = lane->camera;
+        fact.result = &result;
+        lane->judge(&fact, lane->judge_user, &verdict);
+        Act(lane, &fact, &verdict, &frame->image, jpeg, jpeg_len);
     }
     if (media_dec_release(dec, frame) != BASE_OK)
     {
@@ -214,7 +206,7 @@ static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, AppWatch *watch, Medi
     return rc;
 }
 
-static int Drain(Lane *lane, Algo *ai, InferWait *wait, AppWatch *watch, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len)
+static int Drain(Lane *lane, Algo *ai, InferWait *wait, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len)
 {
     for (;;)
     {
@@ -230,14 +222,14 @@ static int Drain(Lane *lane, Algo *ai, InferWait *wait, AppWatch *watch, MediaDe
         {
             return -1;
         }
-        if (UseFrame(lane, ai, wait, watch, dec, jpeg, jpeg_len, &frame) != 0)
+        if (UseFrame(lane, ai, wait, dec, jpeg, jpeg_len, &frame) != 0)
         {
             return -1;
         }
     }
 }
 
-static BaseStatus SendPkt(Lane *lane, Algo *ai, InferWait *wait, AppWatch *watch, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len, const uint8_t *data, int len, int64_t pts, int eos)
+static BaseStatus SendPkt(Lane *lane, Algo *ai, InferWait *wait, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len, const uint8_t *data, int len, int64_t pts, int eos)
 {
     int spins;
     for (spins = 0; spins < 200; spins++)
@@ -248,7 +240,7 @@ static BaseStatus SendPkt(Lane *lane, Algo *ai, InferWait *wait, AppWatch *watch
         {
             return BASE_OK;
         }
-        if (status != BASE_AGAIN || Drain(lane, ai, wait, watch, dec, jpeg, jpeg_len) != 0)
+        if (status != BASE_AGAIN || Drain(lane, ai, wait, dec, jpeg, jpeg_len) != 0)
         {
             return status == BASE_AGAIN ? BASE_ERR : status;
         }
@@ -303,7 +295,6 @@ static void RunOnce(Lane *lane)
     MediaDec *dec;
     Algo *ai;
     InferWait wait;
-    AppWatch watch;
     AlgoOpenParam param;
     NetInfo info;
     uint8_t *jpeg;
@@ -332,7 +323,10 @@ static void RunOnce(Lane *lane)
     jpeg_len = 0;
     saw_key = 0;
     memset(&wait, 0, sizeof(wait));
-    app_watch_reset(&watch);
+    if (lane->reset != NULL)
+    {
+        lane->reset(lane->judge_user);
+    }
     if (pthread_mutex_init(&wait.mu, NULL) != 0 || pthread_cond_init(&wait.cv, NULL) != 0)
     {
         ClosePull(TakePull(lane));
@@ -376,8 +370,8 @@ static void RunOnce(Lane *lane)
             }
             saw_key = 1;
         }
-        if (SendPkt(lane, ai, &wait, &watch, dec, &jpeg, &jpeg_len, pkt.data, pkt.size, pkt.pts_us, 0) != BASE_OK ||
-            Drain(lane, ai, &wait, &watch, dec, &jpeg, &jpeg_len) != 0)
+        if (SendPkt(lane, ai, &wait, dec, &jpeg, &jpeg_len, pkt.data, pkt.size, pkt.pts_us, 0) != BASE_OK ||
+            Drain(lane, ai, &wait, dec, &jpeg, &jpeg_len) != 0)
         {
             break;
         }
@@ -409,6 +403,67 @@ static void *LaneMain(void *arg)
         }
     }
     return NULL;
+}
+
+static void UseDefault(Lane *lane)
+{
+    lane->stay.param.present_sec = lane->cfg->present_sec;
+    lane->stay.param.shot_sec = lane->cfg->shot_sec;
+    lane->stay.param.absent_sec = lane->cfg->absent_sec;
+    lane->judge = app_watch_judge;
+    lane->judge_user = &lane->stay;
+    lane->kept = app_watch_judge_kept;
+    lane->kept_user = &lane->stay;
+    lane->reset = app_watch_judge_reset;
+    lane->act = app_act_run;
+    lane->act_user = NULL;
+}
+
+static void UseHooks(Lane *lane, int index)
+{
+    UseDefault(lane);
+    if (g_judge_on)
+    {
+        lane->judge = g_judge.judge;
+        lane->kept = g_judge.kept;
+        lane->reset = g_judge.reset;
+        lane->judge_user = NULL;
+        lane->kept_user = NULL;
+        if (g_judge.open != NULL)
+        {
+            lane->judge_user = g_judge.open(index, lane->camera, g_judge.user);
+            lane->kept_user = lane->judge_user;
+        }
+    }
+    if (g_act_on)
+    {
+        lane->act = g_act.act;
+        lane->act_user = g_act.user;
+    }
+}
+
+void app_run_set_judge(const AppRunJudge *judge)
+{
+    if (judge == NULL || judge->judge == NULL)
+    {
+        g_judge_on = 0;
+        memset(&g_judge, 0, sizeof(g_judge));
+        return;
+    }
+    g_judge = *judge;
+    g_judge_on = 1;
+}
+
+void app_run_set_act(const AppRunAct *act)
+{
+    if (act == NULL || act->act == NULL)
+    {
+        g_act_on = 0;
+        memset(&g_act, 0, sizeof(g_act));
+        return;
+    }
+    g_act = *act;
+    g_act_on = 1;
 }
 
 static int CoreOf(int index)
@@ -486,6 +541,7 @@ BaseStatus app_run(const char *ini_path)
         lane[i].algo = &algo;
         lane[i].jpeg_quality = media.jpeg_quality;
         lane[i].mail = mail;
+        UseHooks(&lane[i], i);
         if (pthread_mutex_init(&lane[i].mu, NULL) != 0)
         {
             break;

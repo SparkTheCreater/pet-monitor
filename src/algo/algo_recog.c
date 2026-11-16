@@ -248,6 +248,7 @@ void ai_recog_register(void)
         RecogPre,
         RecogInfer,
         RecogPost,
+        NULL,
         NULL
     };
     algo_register_mod(&mod);

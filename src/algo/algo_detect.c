@@ -600,6 +600,7 @@ void ai_detect_register(void)
         DetectPre,
         DetectInfer,
         DetectPost,
+        NULL,
         NULL
     };
     algo_register_mod(&mod);

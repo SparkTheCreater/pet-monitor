@@ -181,7 +181,7 @@ flowchart TD
   gate -->|收下| queue["入队，优先级大的先出"]
   queue --> worker["工作线程取出一包"]
   worker --> kind{"是帧？"}
-  kind -->|是| mode["按挂上的顺序串行，或并行"]
+  kind -->|是| mode["按计划，或串行，或并行"]
   mode --> step["preprocess、infer、postprocess"]
   step --> done{"三步都成功？"}
   done -->|是| data["DATA 回调"]
@@ -197,6 +197,8 @@ flowchart TD
   class data,echo go
   class fail,again,bad stop
 ```
+
+没有计划时，一帧会跑每个已经挂上并且有回调的算法。`ALGO_EXEC_SERIAL` 按挂上的顺序，`ALGO_EXEC_PARALLEL` 同时跑。`algo_set_plan` 给出分组。组与组同时跑。组内按计划的顺序，从第二步起模块可以用 `bind` 收下上一步的结果，再做 `preprocess`。某一步失败，这一组后面的步骤不再跑。传入空计划就回到 `exec`。
 
 装上一个插件，再跑一帧：
 

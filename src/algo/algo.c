@@ -76,6 +76,8 @@ struct Algo
     int stop;
     int running;
     int worker_on;
+    AlgoPlan plan;
+    int plan_on;
     pthread_t worker;
     pthread_mutex_t mu;
     pthread_cond_t cv;
@@ -556,6 +558,88 @@ BaseStatus algo_get_config(Algo *ai, int kind, void *cfg, int len)
     return BASE_OK;
 }
 
+static int Mounted(const Algo *ai, int kind)
+{
+    int i;
+    for (i = 0; i < ALGO_SLOT_MAX; ++i)
+    {
+        if (ai->slot[i].used && ai->slot[i].impl != NULL && ai->slot[i].kind == kind)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int PlanOk(const Algo *ai, const AlgoPlan *plan)
+{
+    int kind_n;
+    int kinds[ALGO_SLOT_MAX];
+    int g;
+    int k;
+    int i;
+    if (plan->group_count < 1 || plan->group_count > ALGO_SLOT_MAX)
+    {
+        return 0;
+    }
+    kind_n = 0;
+    for (g = 0; g < plan->group_count; ++g)
+    {
+        const AlgoChain *chain = &plan->group[g];
+        if (chain->count < 1 || chain->count > ALGO_SLOT_MAX)
+        {
+            return 0;
+        }
+        for (k = 0; k < chain->count; ++k)
+        {
+            if (kind_n >= ALGO_SLOT_MAX || !Mounted(ai, chain->kind[k]))
+            {
+                return 0;
+            }
+            for (i = 0; i < kind_n; ++i)
+            {
+                if (kinds[i] == chain->kind[k])
+                {
+                    return 0;
+                }
+            }
+            kinds[kind_n] = chain->kind[k];
+            kind_n += 1;
+        }
+    }
+    return 1;
+}
+
+BaseStatus algo_set_plan(Algo *ai, const AlgoPlan *plan)
+{
+    if (ai == NULL)
+    {
+        return BASE_ERR;
+    }
+    pthread_mutex_lock(&ai->mu);
+    if (Busy(ai))
+    {
+        pthread_mutex_unlock(&ai->mu);
+        return BASE_ERR;
+    }
+    if (plan == NULL)
+    {
+        memset(&ai->plan, 0, sizeof(ai->plan));
+        ai->plan_on = 0;
+        pthread_mutex_unlock(&ai->mu);
+        return BASE_OK;
+    }
+    if (!PlanOk(ai, plan))
+    {
+        pthread_mutex_unlock(&ai->mu);
+        return BASE_ERR;
+    }
+    ai->plan = *plan;
+    ai->plan_on = 1;
+    pthread_mutex_unlock(&ai->mu);
+    return BASE_OK;
+}
+
 static int HasCallback(const Algo *ai)
 {
     int i;
@@ -564,6 +648,29 @@ static int HasCallback(const Algo *ai)
         if (ai->slot[i].used && ai->slot[i].cb != NULL)
         {
             return 1;
+        }
+    }
+    return 0;
+}
+
+static int PlanHasCallback(const Algo *ai)
+{
+    int g;
+    int k;
+    if (!ai->plan_on)
+    {
+        return HasCallback(ai);
+    }
+    for (g = 0; g < ai->plan.group_count; ++g)
+    {
+        const AlgoChain *chain = &ai->plan.group[g];
+        for (k = 0; k < chain->count; ++k)
+        {
+            Slot *slot = FindSlot((Algo *)ai, chain->kind[k]);
+            if (slot != NULL && slot->cb != NULL)
+            {
+                return 1;
+            }
         }
     }
     return 0;
@@ -590,6 +697,22 @@ static void Take(Algo *ai, Job *out)
     }
 }
 
+static void FillView(SlotView *view, Slot *slot)
+{
+    memset(view, 0, sizeof(*view));
+    view->kind = slot->kind;
+    view->impl = slot->impl;
+    view->mod = slot->mod;
+    view->cb = slot->cb;
+    view->user = slot->user;
+    view->cfg_len = slot->cfg_len;
+    if (slot->cfg_len > 0)
+    {
+        memcpy(view->cfg, slot->cfg, (size_t)slot->cfg_len);
+    }
+    view->result = slot->result;
+}
+
 static int Snapshot(Algo *ai, SlotView *view, int cap)
 {
     int n;
@@ -602,18 +725,44 @@ static int Snapshot(Algo *ai, SlotView *view, int cap)
         {
             continue;
         }
-        view[n].kind = slot->kind;
-        view[n].impl = slot->impl;
-        view[n].mod = slot->mod;
-        view[n].cb = slot->cb;
-        view[n].user = slot->user;
-        view[n].cfg_len = slot->cfg_len;
-        if (slot->cfg_len > 0)
-        {
-            memcpy(view[n].cfg, slot->cfg, (size_t)slot->cfg_len);
-        }
-        view[n].result = slot->result;
+        FillView(&view[n], slot);
         n += 1;
+    }
+    return n;
+}
+
+typedef struct
+{
+    SlotView step[ALGO_SLOT_MAX];
+    int n;
+}
+GroupRun;
+
+static int SnapshotPlan(Algo *ai, GroupRun *group, int cap)
+{
+    int n;
+    int g;
+    int k;
+    n = 0;
+    for (g = 0; g < ai->plan.group_count && n < cap; ++g)
+    {
+        const AlgoChain *chain = &ai->plan.group[g];
+        GroupRun *out = &group[n];
+        out->n = 0;
+        for (k = 0; k < chain->count && out->n < ALGO_SLOT_MAX; ++k)
+        {
+            Slot *slot = FindSlot(ai, chain->kind[k]);
+            if (slot == NULL || slot->cb == NULL)
+            {
+                continue;
+            }
+            FillView(&out->step[out->n], slot);
+            out->n += 1;
+        }
+        if (out->n > 0)
+        {
+            n += 1;
+        }
     }
     return n;
 }
@@ -634,13 +783,14 @@ static void Emit(const SlotView *view, const Job *job, int cb_type, int status, 
     view->cb(&info);
 }
 
-static void RunOne(const SlotView *view, const Job *job)
+/* 三步都成功返回 1。失败已经回调 STATUS。 */
+static int RunOne(const SlotView *view, const Job *job)
 {
     const BaseImage *frame;
     if (view->mod == NULL)
     {
         Emit(view, job, ALGO_CB_STATUS, BASE_ERR, NULL, 0);
-        return;
+        return 0;
     }
     frame = job->has_frame ? &job->frame : NULL;
     if (view->mod->preprocess(view->impl, frame) != BASE_OK ||
@@ -648,9 +798,10 @@ static void RunOne(const SlotView *view, const Job *job)
         view->mod->postprocess(view->impl, view->result, view->mod->result_size) != BASE_OK)
     {
         Emit(view, job, ALGO_CB_STATUS, BASE_ERR, NULL, 0);
-        return;
+        return 0;
     }
     Emit(view, job, ALGO_CB_DATA, BASE_OK, view->result, view->mod->result_size);
+    return 1;
 }
 
 static void RunSide(const SlotView *view, const Job *job)
@@ -732,6 +883,81 @@ static void Execute(const SlotView *view, int n, const Job *job)
     }
 }
 
+static void RunChain(const SlotView *step, int n, const Job *job)
+{
+    const void *prev;
+    int prev_size;
+    int i;
+    prev = NULL;
+    prev_size = 0;
+    for (i = 0; i < n; ++i)
+    {
+        if (prev != NULL && step[i].mod != NULL && step[i].mod->bind != NULL)
+        {
+            if (step[i].mod->bind(step[i].impl, prev, prev_size) != BASE_OK)
+            {
+                Emit(&step[i], job, ALGO_CB_STATUS, BASE_ERR, NULL, 0);
+                return;
+            }
+        }
+        if (!RunOne(&step[i], job))
+        {
+            return;
+        }
+        prev = step[i].result;
+        prev_size = step[i].mod->result_size;
+    }
+}
+
+typedef struct
+{
+    const GroupRun *group;
+    const Job *job;
+}
+ChainPack;
+
+static void *ChainThread(void *arg)
+{
+    ChainPack *pack;
+    pack = (ChainPack *)arg;
+    RunChain(pack->group->step, pack->group->n, pack->job);
+    return NULL;
+}
+
+static void ExecutePlan(GroupRun *group, int n, const Job *job)
+{
+    pthread_t th[ALGO_SLOT_MAX];
+    ChainPack pack[ALGO_SLOT_MAX];
+    int started[ALGO_SLOT_MAX];
+    int i;
+    if (n <= 0)
+    {
+        return;
+    }
+    if (n == 1)
+    {
+        RunChain(group[0].step, group[0].n, job);
+        return;
+    }
+    for (i = 0; i < n; ++i)
+    {
+        pack[i].group = &group[i];
+        pack[i].job = job;
+        started[i] = pthread_create(&th[i], NULL, ChainThread, &pack[i]) == 0;
+        if (!started[i])
+        {
+            RunChain(group[i].step, group[i].n, job);
+        }
+    }
+    for (i = 0; i < n; ++i)
+    {
+        if (started[i])
+        {
+            pthread_join(th[i], NULL);
+        }
+    }
+}
+
 static void *Worker(void *arg)
 {
     Algo *ai;
@@ -740,7 +966,9 @@ static void *Worker(void *arg)
     {
         Job job;
         SlotView view[ALGO_SLOT_MAX];
+        GroupRun group[ALGO_SLOT_MAX];
         int n;
+        int use_plan;
         pthread_mutex_lock(&ai->mu);
         while (ai->q_count == 0 && !ai->stop)
         {
@@ -752,10 +980,27 @@ static void *Worker(void *arg)
             break;
         }
         Take(ai, &job);
-        n = Snapshot(ai, view, ALGO_SLOT_MAX);
+        use_plan = 0;
+        n = 0;
+        if (job.type == ALGO_DATA_FRAME && ai->plan_on)
+        {
+            n = SnapshotPlan(ai, group, ALGO_SLOT_MAX);
+            use_plan = 1;
+        }
+        else
+        {
+            n = Snapshot(ai, view, ALGO_SLOT_MAX);
+        }
         ai->running = 1;
         pthread_mutex_unlock(&ai->mu);
-        Execute(view, n, &job);
+        if (use_plan)
+        {
+            ExecutePlan(group, n, &job);
+        }
+        else
+        {
+            Execute(view, n, &job);
+        }
         pthread_mutex_lock(&ai->mu);
         ai->running = 0;
         pthread_cond_broadcast(&ai->cv);
@@ -799,7 +1044,7 @@ BaseStatus algo_input(Algo *ai, const AlgoInput *in)
         job.frame = *in->frame;
     }
     pthread_mutex_lock(&ai->mu);
-    if (ai->stop || !HasCallback(ai))
+    if (ai->stop || (in->type == ALGO_DATA_FRAME ? !PlanHasCallback(ai) : !HasCallback(ai)))
     {
         pthread_mutex_unlock(&ai->mu);
         return BASE_ERR;

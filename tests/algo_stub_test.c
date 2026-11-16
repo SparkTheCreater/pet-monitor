@@ -23,6 +23,8 @@ static int g_go;
 static int g_held;
 static int g_inflight;
 static int g_max_inflight;
+static int g_bound;
+static int g_bound_value;
 
 typedef struct
 {
@@ -234,11 +236,42 @@ static BaseStatus OverlapPre(void *impl, const BaseImage *frame)
     return BASE_OK;
 }
 
-static int RegisterKind(int kind, const char *name, BaseStatus (*pre)(void *, const BaseImage *))
+static BaseStatus FailPost(void *impl, void *buf, int buf_size)
 {
-    static AlgoModule mod[8];
+    (void)impl;
+    (void)buf;
+    (void)buf_size;
+    return BASE_ERR;
+}
+
+static BaseStatus BindPrev(void *impl, const void *prev, int prev_size)
+{
+    (void)impl;
+    if (prev == NULL || prev_size < (int)sizeof(int))
+    {
+        return BASE_ERR;
+    }
+    g_bound_value = *(const int *)prev;
+    g_bound = 1;
+    return BASE_OK;
+}
+
+static BaseStatus BoundPost(void *impl, void *buf, int buf_size)
+{
+    (void)impl;
+    if (buf == NULL || buf_size < (int)sizeof(int))
+    {
+        return BASE_ERR;
+    }
+    *(int *)buf = g_bound_value;
+    return BASE_OK;
+}
+
+static int RegisterEx(int kind, const char *name, BaseStatus (*pre)(void *, const BaseImage *), BaseStatus (*post)(void *, void *, int), BaseStatus (*bind)(void *, const void *, int))
+{
+    static AlgoModule mod[16];
     static int n;
-    if (n >= 8)
+    if (n >= 16)
     {
         return 0;
     }
@@ -250,13 +283,19 @@ static int RegisterKind(int kind, const char *name, BaseStatus (*pre)(void *, co
     mod[n].close = OkClose;
     mod[n].preprocess = pre;
     mod[n].infer = OkInfer;
-    mod[n].postprocess = OkPost;
+    mod[n].postprocess = post != NULL ? post : OkPost;
+    mod[n].bind = bind;
     if (algo_register(&mod[n]) != BASE_OK)
     {
         return 0;
     }
     n += 1;
     return 1;
+}
+
+static int RegisterKind(int kind, const char *name, BaseStatus (*pre)(void *, const BaseImage *))
+{
+    return RegisterEx(kind, name, pre, NULL, NULL);
 }
 
 static void FakeImage(BaseImage *image)
@@ -320,6 +359,7 @@ static void RunAi(void)
     Expect(algo_set_config(NULL, ALGO_DETECT, NULL, 0) == BASE_ERR, "ai config null");
     Expect(algo_get_config(NULL, ALGO_DETECT, cfg, 4) == BASE_ERR, "ai get config null");
     Expect(algo_input(NULL, NULL) == BASE_ERR, "ai input null");
+    Expect(algo_set_plan(NULL, NULL) == BASE_ERR, "ai plan null");
     algo_close(NULL);
 
     memset(&param, 0, sizeof(param));
@@ -351,6 +391,11 @@ static void RunAi(void)
     Expect(RegisterKind(102, "serial-b", PassPre), "reg b");
     Expect(RegisterKind(103, "parallel-a", OverlapPre), "reg pa");
     Expect(RegisterKind(104, "parallel-b", OverlapPre), "reg pb");
+    Expect(RegisterEx(111, "chain-a", OverlapPre, NULL, NULL), "reg chain a");
+    Expect(RegisterEx(112, "chain-b", PassPre, BoundPost, BindPrev), "reg chain b");
+    Expect(RegisterKind(113, "chain-side", OverlapPre), "reg chain side");
+    Expect(RegisterEx(131, "fail-a", PassPre, FailPost, NULL), "reg fail a");
+    Expect(RegisterKind(132, "fail-b", PassPre), "reg fail b");
 
     ai = OpenDepth(2);
     Expect(ai != NULL, "ai slots open");
@@ -382,6 +427,14 @@ static void RunAi(void)
     Expect(algo_get_config(ai, 100, cfg, 3) == BASE_OK && memcmp(cfg, "pet", 3) == 0, "queue cfg");
     Expect(SendFrame(ai, &image, 0, ALGO_EXEC_SERIAL, "a") == BASE_OK, "queue a");
     Expect(WaitHeld(1), "queue held");
+    {
+        AlgoPlan busy;
+        memset(&busy, 0, sizeof(busy));
+        busy.group_count = 1;
+        busy.group[0].count = 1;
+        busy.group[0].kind[0] = 100;
+        Expect(algo_set_plan(ai, &busy) == BASE_ERR, "plan busy");
+    }
     Expect(SendFrame(ai, &image, 1, ALGO_EXEC_SERIAL, "low") == BASE_OK, "queue low");
     Expect(SendFrame(ai, &image, 5, ALGO_EXEC_SERIAL, "high") == BASE_OK, "queue high");
     Expect(SendFrame(ai, &image, 9, ALGO_EXEC_SERIAL, "drop") == BASE_AGAIN, "queue full");
@@ -458,6 +511,114 @@ static void RunAi(void)
     }
     Expect(seen_a && seen_b && g_max_inflight == 2, "parallel overlap");
     algo_close(ai);
+
+    ResetCb();
+    g_bound = 0;
+    g_bound_value = 0;
+    pthread_mutex_lock(&g_gate_mu);
+    g_inflight = 0;
+    g_max_inflight = 0;
+    pthread_mutex_unlock(&g_gate_mu);
+    ai = OpenDepth(2);
+    Expect(ai != NULL, "plan open");
+    Expect(algo_add(ai, 102, "m") == BASE_OK && algo_add(ai, 101, "m") == BASE_OK, "plan order add");
+    Expect(algo_set_callback(ai, 101, OnCb, NULL) == BASE_OK, "plan cb 101");
+    Expect(algo_set_callback(ai, 102, OnCb, NULL) == BASE_OK, "plan cb 102");
+    {
+        AlgoPlan bad;
+        AlgoPlan plan;
+        memset(&bad, 0, sizeof(bad));
+        bad.group_count = 1;
+        bad.group[0].count = 2;
+        bad.group[0].kind[0] = 101;
+        bad.group[0].kind[1] = 101;
+        Expect(algo_set_plan(ai, &bad) == BASE_ERR, "plan dup");
+        bad.group[0].kind[1] = 999;
+        Expect(algo_set_plan(ai, &bad) == BASE_ERR, "plan missing");
+        memset(&plan, 0, sizeof(plan));
+        plan.group_count = 1;
+        plan.group[0].count = 2;
+        plan.group[0].kind[0] = 101;
+        plan.group[0].kind[1] = 102;
+        Expect(algo_set_plan(ai, &plan) == BASE_OK, "plan set");
+        Expect(SendFrame(ai, &image, 0, ALGO_EXEC_PARALLEL, "plan") == BASE_OK, "plan send");
+        Expect(WaitCb(2), "plan done");
+        Expect(g_cb[0].kind == 101 && g_cb[1].kind == 102, "plan order");
+        Expect(algo_set_plan(ai, NULL) == BASE_OK, "plan clear");
+        ResetCb();
+        Expect(SendFrame(ai, &image, 0, ALGO_EXEC_SERIAL, "back") == BASE_OK, "plan back");
+        Expect(WaitCb(2), "plan back done");
+        Expect(g_cb[0].kind == 102 && g_cb[1].kind == 101, "mount order");
+    }
+    algo_close(ai);
+
+    ResetCb();
+    g_bound = 0;
+    pthread_mutex_lock(&g_gate_mu);
+    g_inflight = 0;
+    g_max_inflight = 0;
+    pthread_mutex_unlock(&g_gate_mu);
+    ai = OpenDepth(2);
+    Expect(ai != NULL, "chain open");
+    Expect(algo_add(ai, 111, "m") == BASE_OK, "chain add a");
+    Expect(algo_add(ai, 112, "m") == BASE_OK, "chain add b");
+    Expect(algo_add(ai, 113, "m") == BASE_OK, "chain add side");
+    Expect(algo_set_callback(ai, 111, OnCb, NULL) == BASE_OK, "chain cb a");
+    Expect(algo_set_callback(ai, 112, OnCb, NULL) == BASE_OK, "chain cb b");
+    Expect(algo_set_callback(ai, 113, OnCb, NULL) == BASE_OK, "chain cb side");
+    {
+        AlgoPlan plan;
+        int pos_a;
+        int pos_b;
+        memset(&plan, 0, sizeof(plan));
+        plan.group_count = 2;
+        plan.group[0].count = 2;
+        plan.group[0].kind[0] = 111;
+        plan.group[0].kind[1] = 112;
+        plan.group[1].count = 1;
+        plan.group[1].kind[0] = 113;
+        Expect(algo_set_plan(ai, &plan) == BASE_OK, "chain plan");
+        Expect(SendFrame(ai, &image, 0, ALGO_EXEC_SERIAL, "chain") == BASE_OK, "chain send");
+        Expect(WaitCb(3), "chain done");
+        pos_a = -1;
+        pos_b = -1;
+        for (i = 0; i < 3; ++i)
+        {
+            if (g_cb[i].kind == 111)
+            {
+                pos_a = i;
+            }
+            if (g_cb[i].kind == 112)
+            {
+                pos_b = i;
+            }
+        }
+        Expect(pos_a >= 0 && pos_b > pos_a, "chain order");
+        Expect(g_bound == 1 && g_cb[pos_b].value == 7, "chain bind");
+        Expect(g_max_inflight == 2, "chain overlap");
+    }
+    algo_close(ai);
+
+    ResetCb();
+    ai = OpenDepth(1);
+    Expect(ai != NULL, "fail open");
+    Expect(algo_add(ai, 131, "m") == BASE_OK && algo_add(ai, 132, "m") == BASE_OK, "fail add");
+    Expect(algo_set_callback(ai, 131, OnCb, NULL) == BASE_OK, "fail cb a");
+    Expect(algo_set_callback(ai, 132, OnCb, NULL) == BASE_OK, "fail cb b");
+    {
+        AlgoPlan plan;
+        memset(&plan, 0, sizeof(plan));
+        plan.group_count = 1;
+        plan.group[0].count = 2;
+        plan.group[0].kind[0] = 131;
+        plan.group[0].kind[1] = 132;
+        Expect(algo_set_plan(ai, &plan) == BASE_OK, "fail plan");
+        Expect(SendFrame(ai, &image, 0, ALGO_EXEC_SERIAL, "fail") == BASE_OK, "fail send");
+        Expect(WaitCb(1), "fail done");
+        algo_close(ai);
+        ai = NULL;
+        Expect(g_cb_n == 1 && g_cb[0].kind == 131 && g_cb[0].cb_type == ALGO_CB_STATUS, "fail stops");
+    }
 
     Expect(algo_load(ALGO_PLUGIN) == BASE_OK, "plugin load");
     Expect(algo_load(ALGO_PLUGIN) == BASE_ERR, "plugin twice");

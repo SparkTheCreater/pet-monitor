@@ -181,7 +181,7 @@ flowchart TD
   gate -->|taken| queue["Queue, higher priority first"]
   queue --> worker["Worker takes one packet"]
   worker --> kind{"Frame?"}
-  kind -->|yes| mode["Serial in mount order, or parallel"]
+  kind -->|yes| mode["Plan, or serial, or parallel"]
   mode --> step["preprocess, infer, postprocess"]
   step --> done{"All three succeed?"}
   done -->|yes| data["DATA callback"]
@@ -197,6 +197,8 @@ flowchart TD
   class data,echo go
   class fail,again,bad stop
 ```
+
+Without a plan, a frame runs every mounted algorithm that has a callback. `ALGO_EXEC_SERIAL` follows mount order. `ALGO_EXEC_PARALLEL` runs them together. `algo_set_plan` names the groups. Groups run together. Inside a group the order is the plan, and from the second step a module may `bind` the previous result before `preprocess`. A failed step ends that group. A null plan restores `exec`.
 
 Mounting a plugin and running one frame:
 

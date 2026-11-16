@@ -64,6 +64,7 @@ static const AlgoModule g_mod =
     Pre,
     Infer,
     Post,
+    NULL,
     NULL
 };
 

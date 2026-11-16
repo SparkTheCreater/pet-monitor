@@ -474,6 +474,7 @@ static const AlgoModule g_mod =
     Preprocess,
     Infer,
     Postprocess,
+    NULL,
     NULL
 };
 

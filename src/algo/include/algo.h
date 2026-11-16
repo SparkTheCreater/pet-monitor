@@ -50,7 +50,7 @@ typedef enum
 }
 AlgoDataType;
 
-/* 同一帧上几种算法怎么跑。串行按挂上的顺序，并行每种各跑各的模型。 */
+/* 没有计划时，一帧上几种算法怎么跑。串行按挂上的顺序，并行每种各跑各的模型。 */
 typedef enum
 {
     ALGO_EXEC_SERIAL = 0,
@@ -160,7 +160,7 @@ typedef void (*AlgoCallback)(const AlgoCallbackInfo *info);
  * 一次送入。type 取 AlgoDataType。
  * FRAME 要带有效的 frame。其余种类带 data 和 size，帧指针可空。
  * 队列在调用返回后才跑，frame、data、tag 要保持到这次送入的回调都返回。
- * priority 越大越先跑。exec 只对 FRAME 起作用，取 AlgoExec。
+ * priority 越大越先跑。没有计划时 exec 只对 FRAME 起作用，取 AlgoExec。
  */
 typedef struct AlgoInput
 {
@@ -174,10 +174,29 @@ typedef struct AlgoInput
 }
 AlgoInput;
 
+/* 计划里的一组。组内按 kind 的顺序跑。 */
+typedef struct AlgoChain
+{
+    int kind[ALGO_SLOT_MAX];
+    int count;
+}
+AlgoChain;
+
+/*
+ * 句柄上的执行计划。组与组并行，组内串行。
+ * 空计划表示沿用 AlgoInput.exec，已挂上且有回调的都跑。
+ */
+typedef struct AlgoPlan
+{
+    AlgoChain group[ALGO_SLOT_MAX];
+    int group_count;
+}
+AlgoPlan;
+
 /*
  * 一种算法的入口。插件导出 algo_module，返回它的指针。
  * 指针和里面的函数在卸载前一直有效。
- * result_size 是结果缓冲的字节数。side 处理帧以外的数据，没有就填空。
+ * result_size 是结果缓冲的字节数。side 和 bind 没有就填空。
  */
 typedef struct AlgoModule
 {
@@ -190,6 +209,8 @@ typedef struct AlgoModule
     BaseStatus (*infer)(void *impl);
     BaseStatus (*postprocess)(void *impl, void *buf, int buf_size);
     BaseStatus (*side)(void *impl, const AlgoInput *in);
+    /* 组内上一步的结果。第一步和并行的每一种不会调用。 */
+    BaseStatus (*bind)(void *impl, const void *prev, int prev_size);
 }
 AlgoModule;
 
@@ -225,6 +246,14 @@ BaseStatus algo_add(Algo *ai, int kind, const char *model_path);
  * 一种算法一份回调。没有回调的算法不会跑。
  */
 BaseStatus algo_set_callback(Algo *ai, int kind, AlgoCallback cb, void *user);
+
+/*
+ * 同步。保存执行计划。plan 为空则清掉，之后用 AlgoInput.exec。
+ * 队列不空或正在跑时失败。种类必须已经挂上，且不能重复。
+ * 组内第二步起，模块若提供 bind，先收下上一步的结果再预处理。
+ * 某一步失败，这一组后面的步骤不再跑。
+ */
+BaseStatus algo_set_plan(Algo *ai, const AlgoPlan *plan);
 
 /* 同步。保存这种算法的配置原文。cfg 为空或 len 为 0 时清掉。 */
 BaseStatus algo_set_config(Algo *ai, int kind, const void *cfg, int len);

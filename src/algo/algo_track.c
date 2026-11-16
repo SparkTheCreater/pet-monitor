@@ -217,6 +217,7 @@ void ai_track_register(void)
         TrackPre,
         TrackInfer,
         TrackPost,
+        NULL,
         NULL
     };
     algo_register_mod(&mod);

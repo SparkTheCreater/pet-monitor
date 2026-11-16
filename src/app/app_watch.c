@@ -20,7 +20,6 @@ void app_watch_reset(AppWatch *watch)
     memset(watch, 0, sizeof(*watch));
     watch->pair_ms = -1;
     watch->roi_ms = -1;
-    watch->gone_ms = -1;
 }
 
 void app_watch_kept(AppWatch *watch)
@@ -85,10 +84,10 @@ static void ToIdle(AppWatch *watch)
     watch->pending = 0;
     watch->roi_ms = -1;
     watch->pair_ms = -1;
-    watch->gone_ms = -1;
+    watch->cool_ms = 0;
 }
 
-static void ArmPair(AppWatch *watch, AppWatchEvent *ev)
+static void ArmPair(AppWatch *watch, int64_t now_ms, AppWatchEvent *ev)
 {
     if (watch->phase != APP_WATCH_SEEN)
     {
@@ -97,7 +96,7 @@ static void ArmPair(AppWatch *watch, AppWatchEvent *ev)
         watch->roi_ms = -1;
     }
     watch->pending = 1;
-    watch->gone_ms = -1;
+    watch->cool_ms = now_ms;
     ev->keep = 1;
     ev->send = 1;
     ev->pair = 1;
@@ -128,20 +127,11 @@ void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms,
     }
     if (watch->phase == APP_WATCH_SENT)
     {
-        if (frame_cats > 0)
+        if (now_ms - watch->cool_ms < SecMs(param->cooldown_sec))
         {
-            watch->gone_ms = -1;
             return;
         }
-        if (watch->gone_ms < 0)
-        {
-            watch->gone_ms = now_ms;
-        }
-        if (now_ms - watch->gone_ms >= SecMs(param->absent_sec))
-        {
-            ToIdle(watch);
-        }
-        return;
+        ToIdle(watch);
     }
     if (frame_cats >= 2)
     {
@@ -151,7 +141,7 @@ void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms,
         }
         if (now_ms - watch->pair_ms >= SecMs(param->pair_sec))
         {
-            ArmPair(watch, ev);
+            ArmPair(watch, now_ms, ev);
             return;
         }
     }
@@ -205,7 +195,7 @@ void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms,
     if (watch->held)
     {
         watch->phase = APP_WATCH_SENT;
-        watch->gone_ms = -1;
+        watch->cool_ms = now_ms;
         ev->send = 1;
         return;
     }

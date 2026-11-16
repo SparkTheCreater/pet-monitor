@@ -440,7 +440,7 @@ static void UseDefault(Lane *lane)
     lane->stay.param.present_sec = lane->cfg->present_sec;
     lane->stay.param.shot_sec = lane->cfg->shot_sec;
     lane->stay.param.pair_sec = lane->cfg->pair_sec;
-    lane->stay.param.absent_sec = lane->cfg->absent_sec;
+    lane->stay.param.cooldown_sec = lane->cfg->cooldown_sec;
     lane->judge = app_watch_judge;
     lane->judge_user = &lane->stay;
     lane->kept = app_watch_judge_kept;

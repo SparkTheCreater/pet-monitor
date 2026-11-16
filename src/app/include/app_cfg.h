@@ -73,7 +73,9 @@ typedef struct AppConfig
     int shot_sec;
     /* 两只及以上要连续同时出现这么久才发当前这一帧。 */
     int pair_sec;
-    /* 已发信之后，画面里没有猫连续这么久才允许下一次。 */
+    /* 发出去之后，这么久以内不再发。结束时重新计。 */
+    int cooldown_sec;
+    /* 旧配置仍读入。再发间隔以 cooldown_sec 为准。 */
     int absent_sec;
     /* 判真时 JPEG 写到这里。已经拼成绝对路径。 */
     char shot_dir[APP_PATH_MAX];

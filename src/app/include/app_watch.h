@@ -5,7 +5,7 @@
  * 不读图，也不发信。app_watch_judge 是默认判断函数，状态放在 user 里。
  * 两只及以上看全画面，要连续满 pair_sec。中间掉成一只或没有，只清两只的计时。
  * 一只猫看检测区域。区域内没有猫时，清掉一只的计时，并丢掉已留的图。
- * 两条计时互不相消。交出去之后，画面里没有猫连续满 absent_sec 才允许下一次。
+ * 两条计时互不相消。交出去之后 cooldown_sec 内不再发。冷却结束从这一拍重新计。
  * now_ms 用单调时钟。中间没采样到的时间不算中断。
  */
 #ifndef APP_WATCH_H
@@ -30,7 +30,7 @@ typedef struct AppWatchParam
     int present_sec;
     int shot_sec;
     int pair_sec;
-    int absent_sec;
+    int cooldown_sec;
 }
 AppWatchParam;
 
@@ -45,7 +45,7 @@ typedef struct AppWatch
     int64_t roi_ms;
     /* 这一轮两只猫连续出现的起点。小于 0 表示当前不满两只。 */
     int64_t pair_ms;
-    int64_t gone_ms;
+    int64_t cool_ms;
 }
 AppWatch;
 
@@ -55,7 +55,7 @@ typedef struct AppWatchEvent
     int keep;
     /* 留下的 JPEG 作废。 */
     int drop;
-    /* 把留下的 JPEG 发出去。相位已经是已发送。 */
+    /* 把留下的 JPEG 发出去。相位已经是冷却。 */
     int send;
     /* 这一次由全画面的两只猫规则触发。 */
     int pair;

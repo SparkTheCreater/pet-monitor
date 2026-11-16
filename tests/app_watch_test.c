@@ -26,7 +26,7 @@ static AppWatchEvent StepBoth(AppWatch *watch, int64_t now, int frame_cats, int 
     param.present_sec = 20;
     param.shot_sec = 10;
     param.pair_sec = 3;
-    param.absent_sec = 20;
+    param.cooldown_sec = 20;
     app_watch_step(watch, &param, now, frame_cats, roi_cats, &ev);
     return ev;
 }
@@ -55,19 +55,17 @@ static void TestCycle(void)
     ev = Step(&watch, 20000, 1);
     Expect(ev.send && !ev.keep && watch.phase == APP_WATCH_SENT, "send");
     ev = Step(&watch, 30000, 1);
-    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "still held");
+    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "cooling");
     ev = Step(&watch, 30000, 0);
-    Expect(watch.phase == APP_WATCH_SENT, "gone starts");
-    ev = Step(&watch, 49999, 0);
-    Expect(watch.phase == APP_WATCH_SENT, "absent short");
-    ev = Step(&watch, 50000, 0);
-    Expect(watch.phase == APP_WATCH_IDLE, "rearm");
+    Expect(watch.phase == APP_WATCH_SENT, "cool ignores absence");
+    ev = Step(&watch, 39999, 2);
+    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "cool ignores return");
+    ev = Step(&watch, 40000, 1);
+    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "recount");
     ev = Step(&watch, 50000, 1);
-    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "second appear");
-    ev = Step(&watch, 60000, 1);
     Expect(ev.keep && !ev.send, "second shot");
     app_watch_kept(&watch);
-    ev = Step(&watch, 70000, 1);
+    ev = Step(&watch, 60000, 1);
     Expect(ev.send && watch.phase == APP_WATCH_SENT, "second send");
 }
 
@@ -103,17 +101,13 @@ static void TestCool(void)
     ev = Step(&watch, 20000, 0);
     Expect(!ev.send && watch.phase == APP_WATCH_SENT, "just sent");
     ev = Step(&watch, 30000, 2);
-    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "cat returns");
-    ev = Step(&watch, 30000, 0);
-    Expect(watch.phase == APP_WATCH_SENT, "gone again");
-    ev = Step(&watch, 49999, 0);
-    Expect(watch.phase == APP_WATCH_SENT, "absent short");
-    ev = Step(&watch, 50000, 0);
-    Expect(watch.phase == APP_WATCH_IDLE, "rearm");
-    ev = Step(&watch, 50000, 2);
-    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "rearm recounts");
-    ev = Step(&watch, 53000, 2);
-    Expect(ev.keep && ev.send, "pair after rearm");
+    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "pair during cool");
+    ev = Step(&watch, 39999, 0);
+    Expect(watch.phase == APP_WATCH_SENT, "cool holds");
+    ev = Step(&watch, 40000, 2);
+    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "cool done recounts");
+    ev = Step(&watch, 43000, 2);
+    Expect(ev.keep && ev.send, "pair after cool");
 }
 
 static void TestMissedShot(void)
@@ -152,7 +146,7 @@ static void TestJudge(void)
     judge.param.present_sec = 20;
     judge.param.shot_sec = 10;
     judge.param.pair_sec = 3;
-    judge.param.absent_sec = 20;
+    judge.param.cooldown_sec = 20;
     app_watch_reset(&watch);
     app_watch_judge_reset(&judge);
     for (i = 0; i < 8; i++)
@@ -190,7 +184,7 @@ static void TestPair(void)
     judge.param.present_sec = 20;
     judge.param.shot_sec = 10;
     judge.param.pair_sec = 3;
-    judge.param.absent_sec = 20;
+    judge.param.cooldown_sec = 20;
     app_watch_judge_reset(&judge);
     verdict = JudgeAt(&judge, 0, 2);
     Expect(!verdict.keep && !verdict.send, "judge pair waits");

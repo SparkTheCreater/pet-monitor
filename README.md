@@ -62,7 +62,34 @@ ctest --test-dir build --output-on-failure
 
 ## Layers
 
-Six libraries. The application is the only place that joins a URL, a decoder, a model, a rule, and a mailer. A lower library returns a status, or invokes a function the caller registered.
+`base` stands beside the stack. Every library in the box may use it. From the top of the box: `net`, then `app`, then `media` and `algo` side by side, then `plt`. An arrow here runs from the upper layer to the layer under it. `app` is the only place that joins a URL, a decoder, a model, a rule, and a mailer. A lower library returns a status, or invokes a function the caller registered.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'lineColor': '#1f2328', 'textColor': '#1f2328'}, 'flowchart': {'useMaxWidth': false, 'nodeSpacing': 16, 'rankSpacing': 22, 'padding': 8, 'wrappingWidth': 120}}}%%
+flowchart LR
+  base["base"]
+  subgraph stack[" "]
+    direction TB
+    net["net"]
+    app["app"]
+    net --> app
+    media["media"]
+    algo["algo"]
+    app --> media
+    app --> algo
+    plt["plt"]
+    media --> plt
+    algo --> plt
+  end
+  base --> stack
+  classDef box fill:#ffffff,stroke:#1f2328,color:#1f2328,stroke-width:1.5px
+  class base,net,app,media,algo,plt box
+  style stack fill:#ffffff,stroke:#1f2328,stroke-width:1.5px
+```
+
+In the source, `app` calls `net`. `algo` calls `media`, and `media` calls `plt`. Chip SDK headers live in `src/plt/rk3588`. `PM_PLATFORM` selects `stub` or `rk3588`. A new chip is a new directory under `src/plt`; the headers in `src/plt/include/plt` stay.
+
+The arrows below are library links.
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'lineColor': '#59636e', 'textColor': '#1f2328'}, 'flowchart': {'useMaxWidth': false, 'nodeSpacing': 12, 'rankSpacing': 28, 'padding': 4}}}%%
@@ -85,8 +112,6 @@ flowchart TB
   class net,algo,media,plt,base plain
   class app seam
 ```
-
-An arrow is a link. `net` returns one Annex-B packet, and the camera thread in `app` feeds that packet to `media`. Chip SDK headers live in `src/plt/rk3588`. Callers reach the chip through `media`. `PM_PLATFORM` selects `stub` or `rk3588`. A new chip is a new directory under `src/plt`; the headers in `src/plt/include/plt` stay.
 
 A picture crosses a library as `BaseImage`. The platform hands out NV12 or RGB888.
 

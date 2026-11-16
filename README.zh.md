@@ -62,7 +62,34 @@ ctest --test-dir build --output-on-failure
 
 ## 分层
 
-六个库。哪一路地址进哪个解码器、挂哪个模型、用哪条规则、信发给谁，只在应用层写。下层返回状态码，或调用上层登记过的函数。
+`base` 站在栈的旁边，盒子里的每一层都可以用它。盒子里从上到下是 `net`、`app`、并排的 `media` 和 `algo`，最底下是 `plt`。这里的箭头从上一层指向它下面的那一层。哪一路地址进哪个解码器、挂哪个模型、用哪条规则、信发给谁，只在 `app` 里写。下层返回状态码，或调用上层登记过的函数。
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '14px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'lineColor': '#1f2328', 'textColor': '#1f2328'}, 'flowchart': {'useMaxWidth': false, 'nodeSpacing': 16, 'rankSpacing': 22, 'padding': 8, 'wrappingWidth': 120}}}%%
+flowchart LR
+  base["base"]
+  subgraph stack[" "]
+    direction TB
+    net["net"]
+    app["app"]
+    net --> app
+    media["media"]
+    algo["algo"]
+    app --> media
+    app --> algo
+    plt["plt"]
+    media --> plt
+    algo --> plt
+  end
+  base --> stack
+  classDef box fill:#ffffff,stroke:#1f2328,color:#1f2328,stroke-width:1.5px
+  class base,net,app,media,algo,plt box
+  style stack fill:#ffffff,stroke:#1f2328,stroke-width:1.5px
+```
+
+源码里，`app` 调用 `net`。`algo` 调用 `media`，`media` 再调用 `plt`。芯片 SDK 的头文件在 `src/plt/rk3588`。`PM_PLATFORM` 选择 `stub` 或 `rk3588`。换芯片时在 `src/plt` 下加一个目录，`src/plt/include/plt` 里的头文件保持不动。
+
+下面的箭头是库的链接关系。
 
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'lineColor': '#59636e', 'textColor': '#1f2328'}, 'flowchart': {'useMaxWidth': false, 'nodeSpacing': 12, 'rankSpacing': 28, 'padding': 4}}}%%
@@ -85,8 +112,6 @@ flowchart TB
   class net,algo,media,plt,base plain
   class app seam
 ```
-
-箭头是链接关系。`net` 交出一帧 Annex B，相机线程再把这一包送给 `media`。芯片 SDK 的头文件在 `src/plt/rk3588`。要用芯片，走 `media`。`PM_PLATFORM` 选择 `stub` 或 `rk3588`。换芯片时在 `src/plt` 下加一个目录，`src/plt/include/plt` 里的头文件保持不动。
 
 图像过库时是 `BaseImage`。平台交出来的像素是 NV12 或 RGB888。
 

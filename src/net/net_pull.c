@@ -337,14 +337,13 @@ static BaseStatus Feed(NetPull *pull, const uint8_t *data, int size, int64_t pts
         {
             return BASE_ERR;
         }
-        if (used <= 0)
-        {
-            break;
-        }
-        data += used;
-        size -= used;
         if (produced == 1)
         {
+            if (used > 0)
+            {
+                data += used;
+                size -= used;
+            }
             if (size > 0 && SaveTail(pull, data, size, pts) != 0)
             {
                 return BASE_ERR;
@@ -352,6 +351,12 @@ static BaseStatus Feed(NetPull *pull, const uint8_t *data, int size, int64_t pts
             *got = 1;
             return BASE_OK;
         }
+        if (used <= 0)
+        {
+            break;
+        }
+        data += used;
+        size -= used;
     }
     return BASE_OK;
 }

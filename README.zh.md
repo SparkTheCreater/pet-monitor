@@ -222,6 +222,25 @@ sequenceDiagram
   Algo-->>Caller: DATA 回调
 ```
 
+组内串行放在同一组里，顺序写在计划中。第二步先 `bind` 收下第一步的结果，再跑自己的三步。某一步失败，这一组后面的步骤不再跑。同一帧上的其他组仍会跑。
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'primaryColor': '#f6f8fa', 'primaryTextColor': '#1f2328', 'primaryBorderColor': '#d0d7de', 'lineColor': '#59636e', 'textColor': '#1f2328', 'actorBkg': '#f6f8fa', 'actorBorder': '#d0d7de', 'actorTextColor': '#1f2328', 'actorLineColor': '#d0d7de', 'signalColor': '#1f2328', 'signalTextColor': '#1f2328', 'noteBkgColor': '#fff8c5', 'noteBorderColor': '#d4a72c', 'noteTextColor': '#1f2328', 'labelBoxBkgColor': '#ddf4ff', 'labelBoxBorderColor': '#54aeff', 'labelTextColor': '#1f2328'}, 'sequence': {'useMaxWidth': false, 'mirrorActors': false, 'actorMargin': 16, 'width': 72, 'height': 20, 'messageMargin': 12, 'diagramMarginX': 4, 'diagramMarginY': 2, 'actorFontSize': 12, 'messageFontSize': 12, 'noteFontSize': 12}}}%%
+sequenceDiagram
+  participant Caller as 调用方
+  participant Algo as algo
+  participant First as 第一种
+  participant Second as 第二种
+  Caller->>Algo: algo_set_plan，同一组
+  Caller->>Algo: algo_input
+  Note over Algo: 这一组按顺序跑
+  Algo->>First: preprocess、infer、postprocess
+  Algo-->>Caller: DATA 回调
+  Algo->>Second: bind 上一步的结果
+  Algo->>Second: preprocess、infer、postprocess
+  Algo-->>Caller: DATA 回调
+```
+
 猫检测是种类 `3`。`algo_add(ai, ALGO_CAT_DET, "models/Catto.rknn")` 用的是内置模块，不调用 `algo_load`。
 
 ## 判断和执行

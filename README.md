@@ -222,6 +222,25 @@ sequenceDiagram
   Algo-->>Caller: DATA callback
 ```
 
+Serial steps share one group. The plan lists them in order. The second `bind` receives the first result, then that step runs. A failed step stops the rest of the group. Other groups on the same frame still run.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'primaryColor': '#f6f8fa', 'primaryTextColor': '#1f2328', 'primaryBorderColor': '#d0d7de', 'lineColor': '#59636e', 'textColor': '#1f2328', 'actorBkg': '#f6f8fa', 'actorBorder': '#d0d7de', 'actorTextColor': '#1f2328', 'actorLineColor': '#d0d7de', 'signalColor': '#1f2328', 'signalTextColor': '#1f2328', 'noteBkgColor': '#fff8c5', 'noteBorderColor': '#d4a72c', 'noteTextColor': '#1f2328', 'labelBoxBkgColor': '#ddf4ff', 'labelBoxBorderColor': '#54aeff', 'labelTextColor': '#1f2328'}, 'sequence': {'useMaxWidth': false, 'mirrorActors': false, 'actorMargin': 16, 'width': 72, 'height': 20, 'messageMargin': 12, 'diagramMarginX': 4, 'diagramMarginY': 2, 'actorFontSize': 12, 'messageFontSize': 12, 'noteFontSize': 12}}}%%
+sequenceDiagram
+  participant Caller
+  participant Algo as algo
+  participant First as first kind
+  participant Second as second kind
+  Caller->>Algo: algo_set_plan, one group
+  Caller->>Algo: algo_input
+  Note over Algo: this group runs in order
+  Algo->>First: preprocess, infer, postprocess
+  Algo-->>Caller: DATA callback
+  Algo->>Second: bind previous result
+  Algo->>Second: preprocess, infer, postprocess
+  Algo-->>Caller: DATA callback
+```
+
 Cat detection is kind `3`. `algo_add(ai, ALGO_CAT_DET, "models/Catto.rknn")` uses the built-in module. It does not call `algo_load`.
 
 ## Rules and actions

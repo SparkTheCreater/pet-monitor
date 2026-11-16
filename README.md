@@ -1,10 +1,40 @@
 # pet-monitor
 
-摄像头对着食盆和猫砂盆，记录猫的进食和上厕所。
+家用网络摄像头通过 RTSP 接入。RK3588 上拉流、硬解、用 NPU 做猫检测。判断为真时，把画了框的 JPEG 存到本地，并发送邮件。
 
-家用网络摄像头通过 RTSP 接入，检测跑在 RK3588 上。一次进食或上厕所结束后留下记录。
+每路相机一条线程，各用各的模型和置信度。邮件在另一条线程里发出。`SIGINT` 或 `SIGTERM` 结束进程。
 
-用法和配置以后再补。
+## 默认判断
+
+检测在整幅画面上做，检出的框都保留。检测区域只参与一只猫那条规则。区域写成 `roi = x,y,w,h`，单位是原图像素。框的中心落在里面才算。没写区域就看整幅画面。
+
+两条规则是或的关系，计时互不相消：
+
+- 全画面同时有两只及以上的猫，并且连续满 `pair_sec`（缺省 3 秒）。留下当前这一帧，文件名带 `2cats`。中间掉成一只或没有，只清这条计时。
+- 检测区域内有一只猫。出现满 `shot_sec`（缺省 10 秒）留下那一帧，连续停留满 `present_sec`（缺省 20 秒）再发出，文件名带 `event`。区域内这一拍没有猫，这条计时清掉，已留的图也丢掉。
+
+任意一种发出去之后，这一路进入冷却，`cooldown_sec`（缺省 600 秒）内不再发。冷却结束从那一拍重新计。`absent_sec` 仍从配置读入，再发间隔以 `cooldown_sec` 为准。
+
+文件名是 `相机名_event_年月日_时分秒.jpg` 或 `相机名_2cats_年月日_时分秒.jpg`，时间用东八区。目录是 `[event] shot_dir`，相对路径接到 `[base] dir` 后面。画框和置信度用 RGA，再编成 JPEG。落盘之后把同一张图交给邮件队列。
+
+判断和执行都可以换。默认判断是 `app_watch_judge`，默认执行是 `app_act_run`。启动前调用 `app_run_set_judge` 或 `app_run_set_act` 换上自己的函数。空调用恢复默认。
+
+## 运行
+
+在有 MPP、librga 和 RKNN 的机器上配置平台头文件路径后编译，再把样例配置里的地址和发信项改成自己的：
+
+```sh
+cmake -S . -B build -DPM_PLATFORM=rk3588 \
+  -DPM_MPP_INCLUDE=<mpp 头文件目录> \
+  -DPM_RGA_INCLUDE=<librga 头文件目录> \
+  -DPM_RKNN_INCLUDE=<rknn 头文件目录>
+cmake --build build --target pet-monitor
+./build/pet-monitor conf/pet-monitor.ini
+```
+
+不带参数时读 `conf/pet-monitor.ini`。没有芯片时用 `-DPM_PLATFORM=stub` 编译接口测试。`stub` 的 `plt_init` 会失败，不能跑实机拉流。
+
+邮箱账号、授权码和真实的相机地址放在自己的 ini 里，不要提交。样例里的发信项是空的，`[email] enable` 缺省关闭。
 
 ## 分层
 
@@ -87,6 +117,12 @@ flowchart TD
 
 ## 应用层
 
-应用层目前只放发信。目录是 `src/app`，库名是 `app`。头文件在 `src/app/include`，接口是 `app_email_send`。实现用 C++11。
+应用层在 `src/app`，库名是 `app`。头文件在 `src/app/include`。它把拉流、解码、推理、判断和执行串起来。可执行文件是 `pet-monitor`，入口读一份 ini，然后调用 `app_run`。
 
-发信依赖 OpenSSL（`libssl` 和 `libcrypto`）。嵌入式设备上的库路径和链接关系需要自行配置。本工程使用 `find_package(OpenSSL)` 去链接系统里的 OpenSSL。
+配置按段拆开。`[base]` 只提供路径根。`[camera]` 是各路共用的超时和传输方式，每一路是 `[camera.名字]`，写 `url`、`place`、`algo`、`score_min`，可选 `roi`。`place` 取 `eat`、`litter`、`living`、`客厅`、`balcony`、`阳台`。`algo` 取 `detect`、`track`、`recognize`、`cat`，缺省是 `cat`。`[algo]` 给出模型路径和缺省阈值。`[event]` 给出停留、留图、两只猫、冷却和存图目录。`[email]` 给出 SMTP。样例是 `conf/pet-monitor.ini`。
+
+`app_cfg_from_ini` 只读上面这些段。运行时用 `app_cfg_camera_algo`、`app_cfg_camera_score` 和 `app_cfg_box_inside` 取值。
+
+一路相机的顺序是：`net_read` 取出 Annex B，`media_dec` 解出 NV12，按这路的算法和置信度送进 `algo`。全画面的猫数和区域内的猫数分开交给判断函数。判断只返回 `keep`、`send`、`drop`。执行函数按这三个值画框、编 JPEG、写盘或把图交给 `app_mail_post`。邮件线程里调用 `app_email_send`。
+
+发信实现是 C++11，依赖 OpenSSL（`libssl` 和 `libcrypto`）。本工程用 `find_package(OpenSSL)` 链接系统里的 OpenSSL。

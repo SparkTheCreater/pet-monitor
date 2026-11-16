@@ -4,6 +4,8 @@
  */
 #include "app_cfg.h"
 
+#include "base_path.h"
+
 #include <string.h>
 
 static int Eq(const char *a, const char *b);
@@ -293,6 +295,17 @@ BaseStatus app_cfg_from_ini(const BaseIni *ini, AppConfig *out)
         cfg.shot_sec >= cfg.present_sec)
     {
         return BASE_ERR;
+    }
+    {
+        char rel[APP_PATH_MAX];
+        if (base_ini_copy(ini, "event", "shot_dir", "shots", rel, sizeof(rel)) != BASE_OK || rel[0] == '\0')
+        {
+            return BASE_ERR;
+        }
+        if (base_path_join(cfg.dir, rel, cfg.shot_dir, sizeof(cfg.shot_dir)) != BASE_OK)
+        {
+            return BASE_ERR;
+        }
     }
     if (Email(ini, &cfg) != BASE_OK)
     {

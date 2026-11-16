@@ -64,6 +64,8 @@ typedef struct AppConfig
     int shot_sec;
     /* 已发信之后，猫要连续消失这么久才允许下一次。 */
     int absent_sec;
+    /* 判真时 JPEG 写到这里。已经拼成绝对路径。 */
+    char shot_dir[APP_PATH_MAX];
     int email_enable;
     char host[APP_HOST_MAX];
     char user[APP_MAIL_MAX];

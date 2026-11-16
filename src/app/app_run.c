@@ -20,12 +20,14 @@
 #include "net_cfg.h"
 #include "net_pull.h"
 
+#include <errno.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 
 static const int kCoreMask[3] = {1, 2, 4};
@@ -173,6 +175,7 @@ static void Act(Lane *lane, const AppFact *fact, const AppVerdict *verdict, Base
     shot.kept = lane->kept;
     shot.kept_user = lane->kept_user;
     shot.mail = lane->mail;
+    shot.dir = lane->cfg->shot_dir;
     lane->act(&shot, verdict, lane->act_user);
 }
 
@@ -466,6 +469,19 @@ void app_run_set_act(const AppRunAct *act)
     g_act_on = 1;
 }
 
+static void EnsureDir(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+    {
+        return;
+    }
+    if (mkdir(path, 0755) == 0 || errno == EEXIST)
+    {
+        return;
+    }
+    fprintf(stderr, "[app] shot dir %s\n", path);
+}
+
 static int CoreOf(int index)
 {
     if (index < 0)
@@ -514,6 +530,7 @@ BaseStatus app_run(const char *ini_path)
         base_ini_free(ini);
         return BASE_ERR;
     }
+    EnsureDir(app.shot_dir);
     if (media_init() != BASE_OK)
     {
         base_ini_free(ini);

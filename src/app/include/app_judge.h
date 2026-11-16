@@ -35,6 +35,8 @@ typedef struct AppVerdict
     int send;
     /* 留下的 JPEG 作废。 */
     int drop;
+    /* 这次由两只猫规则触发。文件名用它。 */
+    int pair;
 }
 AppVerdict;
 

@@ -248,6 +248,7 @@ static void TestLayers(void)
     ExpectInt(app.present_sec, 20, "present");
     ExpectInt(app.shot_sec, 10, "shot");
     ExpectInt(app.absent_sec, 20, "absent");
+    ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "shot dir");
     ExpectInt(app.email_enable, 0, "mail off");
     ExpectStr(app.host, "smtp.qq.com", "host");
     ExpectStr(app.user, "", "user");
@@ -277,6 +278,7 @@ static void TestLayers(void)
     ExpectInt(app.present_sec, 20, "default present");
     ExpectInt(app.shot_sec, 10, "default shot");
     ExpectInt(app.absent_sec, 20, "default absent");
+    ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "default shot dir");
     base_ini_free(empty);
 
     ini = base_ini_parse(

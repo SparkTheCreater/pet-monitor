@@ -126,6 +126,102 @@ flowchart TB
 
 `libapp` 是静态库。公开头文件是 C。C++11 用在两处：RK3588 平台层，因为 librga 的头文件带 C++ 默认参数；发信，它链接 OpenSSL。
 
+## 智能
+
+一个句柄最多跑四种算法。工作线程不按种类号分支。它调用 `AlgoModule` 上的 `preprocess`、`infer`、`postprocess`，再回调。检测、追踪、识别、猫检测（`0` 到 `3`）在库第一次被用到时自己登记。再加一种，填的是同一张表。队列、优先级、串行还是并行，都留在 `algo.c`。
+
+新种类是这四个以外的正整数，外加名字、1 到 4096 字节的 `result_size`，以及那五个函数。`side` 可空。头、私有数据、码流、音频走它。表里最多 16 种。同一种类登记两次会失败。
+
+```c
+static const AlgoModule g_mod =
+{
+    80,
+    "pose",
+    (int)sizeof(PoseResult),
+    PoseOpen,
+    PoseClose,
+    PosePre,
+    PoseInfer,
+    PosePost,
+    NULL
+};
+
+const AlgoModule *algo_module(void)
+{
+    return &g_mod;
+}
+```
+
+编成共享库。`algo_load` 查找 `algo_module`。`algo_register` 把同一份结构放进表里，不经过 `dlopen`。`tests/algo_probe.c` 就是这个形状，种类号是 `80`。
+
+在句柄上先挂模型，再登记回调。没有回调的那一路不跑。`algo_add` 在队列里还有包或正在跑时失败，最多挂四种。`algo_set_config` 存一小段字节，每次回调原样带上。
+
+```c
+algo_load("libpose.so");
+algo_open(&param, &ai);
+algo_add(ai, 80, "models/pose.rknn");
+algo_set_callback(ai, 80, OnPose, user);
+algo_input(ai, &in);
+```
+
+`algo_input` 在这一包入队后返回。队列满返回 `BASE_AGAIN`，这一包没有收下。句柄上一个回调都没有，返回失败，这一包不进队列。帧、旁路数据和 `tag` 要保持到这次送入的回调都返回。回调发生在工作线程或并行线程里，里面不能调用 `algo_close`。
+
+帧走那三步。三步都成功是 `DATA` 回调，`buf` 是这种算法自己的结果。任一步失败是 `STATUS` 回调。不是帧的包不跑模型，有 `side` 就调用它，再以 `STATUS` 把原文字节交回去。
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'lineColor': '#59636e', 'textColor': '#1f2328'}, 'flowchart': {'useMaxWidth': false, 'nodeSpacing': 10, 'rankSpacing': 16, 'padding': 2}}}%%
+flowchart TD
+  load["algo_load 或 algo_register"] --> table["一张表，16 种"]
+  table --> add["algo_add，最多 4 种"]
+  add --> cb["algo_set_callback"]
+  cb --> feed["algo_input"]
+  feed --> gate{"有回调，且队列有空位？"}
+  gate -->|没有回调| fail["返回失败"]
+  gate -->|已满| again["返回 BASE_AGAIN"]
+  gate -->|收下| queue["入队，优先级大的先出"]
+  queue --> worker["工作线程取出一包"]
+  worker --> kind{"是帧？"}
+  kind -->|是| mode["按挂上的顺序串行，或并行"]
+  mode --> step["preprocess、infer、postprocess"]
+  step --> done{"三步都成功？"}
+  done -->|是| data["DATA 回调"]
+  done -->|否| bad["STATUS 回调"]
+  kind -->|头、私有数据、码流、音频| side["有 side 就调用"]
+  side --> echo["STATUS 回调，字节不变"]
+  classDef plain fill:#f6f8fa,stroke:#d0d7de,color:#1f2328
+  classDef ask fill:#ddf4ff,stroke:#0969da,color:#1f2328
+  classDef go fill:#dafbe1,stroke:#1a7f37,color:#1f2328
+  classDef stop fill:#ffebe9,stroke:#cf222e,color:#1f2328
+  class load,table,add,cb,feed,queue,worker,mode,step,side plain
+  class gate,kind,done ask
+  class data,echo go
+  class fail,again,bad stop
+```
+
+装上一个插件，再跑一帧：
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'primaryColor': '#f6f8fa', 'primaryTextColor': '#1f2328', 'primaryBorderColor': '#d0d7de', 'lineColor': '#59636e', 'textColor': '#1f2328', 'actorBkg': '#f6f8fa', 'actorBorder': '#d0d7de', 'actorTextColor': '#1f2328', 'actorLineColor': '#d0d7de', 'signalColor': '#1f2328', 'signalTextColor': '#1f2328', 'noteBkgColor': '#fff8c5', 'noteBorderColor': '#d4a72c', 'noteTextColor': '#1f2328', 'labelBoxBkgColor': '#ddf4ff', 'labelBoxBorderColor': '#54aeff', 'labelTextColor': '#1f2328'}, 'sequence': {'useMaxWidth': false, 'mirrorActors': false, 'actorMargin': 16, 'width': 72, 'height': 20, 'messageMargin': 12, 'diagramMarginX': 4, 'diagramMarginY': 2, 'actorFontSize': 12, 'messageFontSize': 12, 'noteFontSize': 12}}}%%
+sequenceDiagram
+  participant Caller as 调用方
+  participant Algo as algo
+  participant Mod as AlgoModule
+  Caller->>Algo: algo_load
+  Algo->>Mod: algo_module
+  Caller->>Algo: algo_open
+  Caller->>Algo: algo_add
+  Mod-->>Algo: open
+  Caller->>Algo: algo_set_callback
+  Caller->>Algo: algo_input
+  Note over Algo: 入队，然后工作线程取出
+  Algo->>Mod: preprocess
+  Algo->>Mod: infer
+  Algo->>Mod: postprocess
+  Algo-->>Caller: DATA 回调
+```
+
+猫检测是种类 `3`。`algo_add(ai, ALGO_CAT_DET, "models/Catto.rknn")` 用的是内置模块，不调用 `algo_load`。
+
 ## 判断和执行
 
 相机循环是固定的。每一帧解码之后填一份 `AppFact`：单调时钟、全画面的猫数、框中心落在区域内的猫数、这一路相机、检测框。然后调用判断函数。判断函数写出 `AppVerdict`。执行函数按这份结论去做。

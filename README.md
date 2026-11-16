@@ -126,6 +126,102 @@ A picture crosses a library as `BaseImage`. The platform hands out NV12 or RGB88
 
 `libapp` is static. The public headers are C. C++11 is used in two places: the RK3588 platform, because librga headers carry C++ default arguments, and the mailer, which links OpenSSL.
 
+## Algorithms
+
+One handle runs up to four algorithms. The worker does not branch on the kind number. It calls `preprocess`, `infer`, and `postprocess` on an `AlgoModule`, then the callback. Detect, track, recognize, and cat (`0` through `3`) register themselves the first time the library is used. Another kind is the same table, filled from outside. The queue, the priority, and the choice of serial or parallel stay in `algo.c`.
+
+A new kind is a positive integer other than those four, a name, a `result_size` from 1 to 4096 bytes, and the five functions. `side` is optional. It runs for a header, private data, a stream, or audio. The table holds 16 modules. The same kind twice fails.
+
+```c
+static const AlgoModule g_mod =
+{
+    80,
+    "pose",
+    (int)sizeof(PoseResult),
+    PoseOpen,
+    PoseClose,
+    PosePre,
+    PoseInfer,
+    PosePost,
+    NULL
+};
+
+const AlgoModule *algo_module(void)
+{
+    return &g_mod;
+}
+```
+
+Build that as a shared library. `algo_load` looks up `algo_module`. `algo_register` puts the same struct in the table without `dlopen`. `tests/algo_probe.c` is this shape, with kind `80`.
+
+On a handle, mount the model, then the callback. A slot with no callback does not run. `algo_add` fails while a packet is queued or running, and it stops at four kinds. `algo_set_config` keeps a short byte string and hands it back on every callback.
+
+```c
+algo_load("libpose.so");
+algo_open(&param, &ai);
+algo_add(ai, 80, "models/pose.rknn");
+algo_set_callback(ai, 80, OnPose, user);
+algo_input(ai, &in);
+```
+
+`algo_input` returns when the packet is queued. A full queue returns `BASE_AGAIN`, and the packet was not taken. A handle with no callback returns failure, and the packet stays out. The frame, the side buffer, and `tag` stay valid until every callback for that input returns. The callback runs on the worker, or on a parallel thread. It does not call `algo_close`.
+
+A frame walks the three functions. All three succeeding is a `DATA` callback, and `buf` is that module's result. Any failure is a `STATUS` callback. A packet that is not a frame skips the model, calls `side` when it is set, and comes back as `STATUS` with the original bytes.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'lineColor': '#59636e', 'textColor': '#1f2328'}, 'flowchart': {'useMaxWidth': false, 'nodeSpacing': 10, 'rankSpacing': 16, 'padding': 2}}}%%
+flowchart TD
+  load["algo_load or algo_register"] --> table["One table, 16 kinds"]
+  table --> add["algo_add, up to 4"]
+  add --> cb["algo_set_callback"]
+  cb --> feed["algo_input"]
+  feed --> gate{"A callback, and room in the queue?"}
+  gate -->|no callback| fail["Return failure"]
+  gate -->|full| again["Return BASE_AGAIN"]
+  gate -->|taken| queue["Queue, higher priority first"]
+  queue --> worker["Worker takes one packet"]
+  worker --> kind{"Frame?"}
+  kind -->|yes| mode["Serial in mount order, or parallel"]
+  mode --> step["preprocess, infer, postprocess"]
+  step --> done{"All three succeed?"}
+  done -->|yes| data["DATA callback"]
+  done -->|no| bad["STATUS callback"]
+  kind -->|header, private, stream, audio| side["side, when set"]
+  side --> echo["STATUS callback, bytes unchanged"]
+  classDef plain fill:#f6f8fa,stroke:#d0d7de,color:#1f2328
+  classDef ask fill:#ddf4ff,stroke:#0969da,color:#1f2328
+  classDef go fill:#dafbe1,stroke:#1a7f37,color:#1f2328
+  classDef stop fill:#ffebe9,stroke:#cf222e,color:#1f2328
+  class load,table,add,cb,feed,queue,worker,mode,step,side plain
+  class gate,kind,done ask
+  class data,echo go
+  class fail,again,bad stop
+```
+
+Mounting a plugin and running one frame:
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'fontSize': '12px', 'fontFamily': '-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif', 'background': '#ffffff', 'primaryColor': '#f6f8fa', 'primaryTextColor': '#1f2328', 'primaryBorderColor': '#d0d7de', 'lineColor': '#59636e', 'textColor': '#1f2328', 'actorBkg': '#f6f8fa', 'actorBorder': '#d0d7de', 'actorTextColor': '#1f2328', 'actorLineColor': '#d0d7de', 'signalColor': '#1f2328', 'signalTextColor': '#1f2328', 'noteBkgColor': '#fff8c5', 'noteBorderColor': '#d4a72c', 'noteTextColor': '#1f2328', 'labelBoxBkgColor': '#ddf4ff', 'labelBoxBorderColor': '#54aeff', 'labelTextColor': '#1f2328'}, 'sequence': {'useMaxWidth': false, 'mirrorActors': false, 'actorMargin': 16, 'width': 72, 'height': 20, 'messageMargin': 12, 'diagramMarginX': 4, 'diagramMarginY': 2, 'actorFontSize': 12, 'messageFontSize': 12, 'noteFontSize': 12}}}%%
+sequenceDiagram
+  participant Caller
+  participant Algo as algo
+  participant Mod as AlgoModule
+  Caller->>Algo: algo_load
+  Algo->>Mod: algo_module
+  Caller->>Algo: algo_open
+  Caller->>Algo: algo_add
+  Mod-->>Algo: open
+  Caller->>Algo: algo_set_callback
+  Caller->>Algo: algo_input
+  Note over Algo: queued, then the worker
+  Algo->>Mod: preprocess
+  Algo->>Mod: infer
+  Algo->>Mod: postprocess
+  Algo-->>Caller: DATA callback
+```
+
+Cat detection is kind `3`. `algo_add(ai, ALGO_CAT_DET, "models/Catto.rknn")` uses the built-in module. It does not call `algo_load`.
+
 ## Rules and actions
 
 The camera loop is fixed. For each decoded frame it fills an `AppFact`: monotonic time, how many cats are in the frame, how many box centers sit in the region, the camera, and the boxes. It then calls the judge. The judge writes an `AppVerdict`. The action reads that verdict.

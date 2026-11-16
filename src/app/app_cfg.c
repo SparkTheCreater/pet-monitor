@@ -6,6 +6,7 @@
 
 #include "base_path.h"
 
+#include <stdio.h>
 #include <string.h>
 
 static int Eq(const char *a, const char *b);
@@ -102,6 +103,16 @@ static BaseStatus PlaceOf(const char *text, int *out)
         *out = APP_PLACE_LITTER;
         return BASE_OK;
     }
+    if (Eq(text, "客厅") || Eq(text, "living"))
+    {
+        *out = APP_PLACE_LIVING;
+        return BASE_OK;
+    }
+    if (Eq(text, "阳台") || Eq(text, "balcony"))
+    {
+        *out = APP_PLACE_BALCONY;
+        return BASE_OK;
+    }
     return BASE_ERR;
 }
 
@@ -124,6 +135,32 @@ static BaseStatus ScoreOf(const BaseIni *ini, const char *section, double fallba
         return BASE_ERR;
     }
     *out = (float)score;
+    return BASE_OK;
+}
+
+static BaseStatus RoiOf(const BaseIni *ini, const char *section, AppCamera *cam)
+{
+    const char *text;
+    int x;
+    int y;
+    int w;
+    int h;
+    char tail;
+    if (!base_ini_has(ini, section, "roi"))
+    {
+        cam->has_roi = 0;
+        return BASE_OK;
+    }
+    text = base_ini_str(ini, section, "roi", "");
+    if (sscanf(text, " %d , %d , %d , %d %c", &x, &y, &w, &h, &tail) != 4 || x < 0 || y < 0 || w <= 0 || h <= 0)
+    {
+        return BASE_ERR;
+    }
+    cam->has_roi = 1;
+    cam->roi_x = x;
+    cam->roi_y = y;
+    cam->roi_w = w;
+    cam->roi_h = h;
     return BASE_OK;
 }
 
@@ -165,7 +202,11 @@ static BaseStatus OneCamera(const BaseIni *ini, const char *section, int shared_
     {
         return BASE_ERR;
     }
-    return ScoreOf(ini, section, score, &cam->score_min);
+    if (ScoreOf(ini, section, score, &cam->score_min) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    return RoiOf(ini, section, cam);
 }
 
 static BaseStatus Cameras(const BaseIni *ini, AppConfig *cfg)
@@ -292,6 +333,7 @@ BaseStatus app_cfg_from_ini(const BaseIni *ini, AppConfig *out)
         Positive(ini, "present_sec", 20, &cfg.present_sec) != BASE_OK ||
         Positive(ini, "shot_sec", 10, &cfg.shot_sec) != BASE_OK ||
         Positive(ini, "absent_sec", 20, &cfg.absent_sec) != BASE_OK ||
+        Positive(ini, "pair_sec", 3, &cfg.pair_sec) != BASE_OK ||
         cfg.shot_sec >= cfg.present_sec)
     {
         return BASE_ERR;
@@ -332,4 +374,21 @@ float app_cfg_camera_score(const AppCamera *camera)
         return 0.25f;
     }
     return camera->score_min;
+}
+
+int app_cfg_box_inside(const AppCamera *camera, const BaseRect *box)
+{
+    int cx;
+    int cy;
+    if (camera == NULL || box == NULL)
+    {
+        return 0;
+    }
+    if (!camera->has_roi)
+    {
+        return 1;
+    }
+    cx = box->x + box->w / 2;
+    cy = box->y + box->h / 2;
+    return cx >= camera->roi_x && cy >= camera->roi_y && cx < camera->roi_x + camera->roi_w && cy < camera->roi_y + camera->roi_h;
 }

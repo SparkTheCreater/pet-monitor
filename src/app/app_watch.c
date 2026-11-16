@@ -18,14 +18,22 @@ void app_watch_reset(AppWatch *watch)
         return;
     }
     memset(watch, 0, sizeof(*watch));
+    watch->pair_ms = -1;
+    watch->roi_ms = -1;
     watch->gone_ms = -1;
 }
 
 void app_watch_kept(AppWatch *watch)
 {
-    if (watch != NULL && watch->phase == APP_WATCH_SEEN)
+    if (watch == NULL || watch->phase != APP_WATCH_SEEN)
     {
-        watch->held = 1;
+        return;
+    }
+    watch->held = 1;
+    if (watch->pending)
+    {
+        watch->phase = APP_WATCH_SENT;
+        watch->pending = 0;
     }
 }
 
@@ -43,10 +51,11 @@ void app_watch_judge(const AppFact *fact, void *user, AppVerdict *out)
     {
         return;
     }
-    app_watch_step(&judge->watch, &judge->param, fact->now_ms, fact->has_cat, &ev);
+    app_watch_step(&judge->watch, &judge->param, fact->now_ms, fact->cats, fact->roi_cats, &ev);
     out->keep = ev.keep;
     out->drop = ev.drop;
     out->send = ev.send;
+    out->pair = ev.pair;
 }
 
 void app_watch_judge_kept(void *user)
@@ -73,11 +82,28 @@ static void ToIdle(AppWatch *watch)
 {
     watch->phase = APP_WATCH_IDLE;
     watch->held = 0;
-    watch->mark_ms = 0;
+    watch->pending = 0;
+    watch->roi_ms = -1;
+    watch->pair_ms = -1;
     watch->gone_ms = -1;
 }
 
-void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms, int has_cat, AppWatchEvent *ev)
+static void ArmPair(AppWatch *watch, AppWatchEvent *ev)
+{
+    if (watch->phase != APP_WATCH_SEEN)
+    {
+        watch->phase = APP_WATCH_SEEN;
+        watch->held = 0;
+        watch->roi_ms = -1;
+    }
+    watch->pending = 1;
+    watch->gone_ms = -1;
+    ev->keep = 1;
+    ev->send = 1;
+    ev->pair = 1;
+}
+
+void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms, int frame_cats, int roi_cats, AppWatchEvent *ev)
 {
     int64_t elapsed;
     if (ev != NULL)
@@ -88,21 +114,21 @@ void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms,
     {
         return;
     }
-    if (watch->phase == APP_WATCH_IDLE)
+    if (frame_cats < 0)
     {
-        if (!has_cat)
-        {
-            return;
-        }
-        watch->phase = APP_WATCH_SEEN;
-        watch->mark_ms = now_ms;
-        watch->held = 0;
-        watch->gone_ms = -1;
-        return;
+        frame_cats = 0;
+    }
+    if (roi_cats < 0)
+    {
+        roi_cats = 0;
+    }
+    if (roi_cats > frame_cats)
+    {
+        roi_cats = frame_cats;
     }
     if (watch->phase == APP_WATCH_SENT)
     {
-        if (has_cat)
+        if (frame_cats > 0)
         {
             watch->gone_ms = -1;
             return;
@@ -117,16 +143,56 @@ void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms,
         }
         return;
     }
-    if (!has_cat)
+    if (frame_cats >= 2)
     {
-        if (watch->held)
+        if (watch->pair_ms < 0)
+        {
+            watch->pair_ms = now_ms;
+        }
+        if (now_ms - watch->pair_ms >= SecMs(param->pair_sec))
+        {
+            ArmPair(watch, ev);
+            return;
+        }
+    }
+    else
+    {
+        watch->pair_ms = -1;
+    }
+    watch->pending = 0;
+    if (roi_cats <= 0)
+    {
+        if (watch->phase == APP_WATCH_SEEN && watch->held)
         {
             ev->drop = 1;
         }
-        ToIdle(watch);
+        watch->held = 0;
+        watch->roi_ms = -1;
+        if (watch->pair_ms < 0)
+        {
+            if (watch->phase != APP_WATCH_IDLE)
+            {
+                ToIdle(watch);
+            }
+            return;
+        }
+        if (watch->phase == APP_WATCH_IDLE)
+        {
+            watch->phase = APP_WATCH_SEEN;
+        }
         return;
     }
-    elapsed = now_ms - watch->mark_ms;
+    if (watch->phase == APP_WATCH_IDLE)
+    {
+        watch->phase = APP_WATCH_SEEN;
+        watch->held = 0;
+        watch->pending = 0;
+    }
+    if (watch->roi_ms < 0)
+    {
+        watch->roi_ms = now_ms;
+    }
+    elapsed = now_ms - watch->roi_ms;
     if (!watch->held && elapsed >= SecMs(param->shot_sec) && elapsed < SecMs(param->present_sec))
     {
         ev->keep = 1;
@@ -143,5 +209,10 @@ void app_watch_step(AppWatch *watch, const AppWatchParam *param, int64_t now_ms,
         ev->send = 1;
         return;
     }
-    ToIdle(watch);
+    watch->roi_ms = -1;
+    watch->held = 0;
+    if (watch->pair_ms < 0)
+    {
+        ToIdle(watch);
+    }
 }

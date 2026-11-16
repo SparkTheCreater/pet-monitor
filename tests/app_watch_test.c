@@ -19,15 +19,21 @@ static void Expect(int cond, const char *name)
     g_failed = 1;
 }
 
-static AppWatchEvent Step(AppWatch *watch, int64_t now, int has_cat)
+static AppWatchEvent StepBoth(AppWatch *watch, int64_t now, int frame_cats, int roi_cats)
 {
     AppWatchParam param;
     AppWatchEvent ev;
     param.present_sec = 20;
     param.shot_sec = 10;
+    param.pair_sec = 3;
     param.absent_sec = 20;
-    app_watch_step(watch, &param, now, has_cat, &ev);
+    app_watch_step(watch, &param, now, frame_cats, roi_cats, &ev);
     return ev;
+}
+
+static AppWatchEvent Step(AppWatch *watch, int64_t now, int cats)
+{
+    return StepBoth(watch, now, cats, cats);
 }
 
 static void TestCycle(void)
@@ -49,7 +55,7 @@ static void TestCycle(void)
     ev = Step(&watch, 20000, 1);
     Expect(ev.send && !ev.keep && watch.phase == APP_WATCH_SENT, "send");
     ev = Step(&watch, 30000, 1);
-    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "latched");
+    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "still held");
     ev = Step(&watch, 30000, 0);
     Expect(watch.phase == APP_WATCH_SENT, "gone starts");
     ev = Step(&watch, 49999, 0);
@@ -57,9 +63,9 @@ static void TestCycle(void)
     ev = Step(&watch, 50000, 0);
     Expect(watch.phase == APP_WATCH_IDLE, "rearm");
     ev = Step(&watch, 50000, 1);
-    Expect(watch.phase == APP_WATCH_SEEN && !ev.send, "second appear");
+    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "second appear");
     ev = Step(&watch, 60000, 1);
-    Expect(ev.keep, "second shot");
+    Expect(ev.keep && !ev.send, "second shot");
     app_watch_kept(&watch);
     ev = Step(&watch, 70000, 1);
     Expect(ev.send && watch.phase == APP_WATCH_SENT, "second send");
@@ -84,7 +90,7 @@ static void TestBreak(void)
     Expect(ev.drop && watch.phase == APP_WATCH_IDLE, "drop again");
 }
 
-static void TestAbsentReset(void)
+static void TestCool(void)
 {
     AppWatch watch;
     AppWatchEvent ev;
@@ -94,15 +100,20 @@ static void TestAbsentReset(void)
     app_watch_kept(&watch);
     ev = Step(&watch, 20000, 1);
     Expect(ev.send, "sent");
-    Step(&watch, 20000, 0);
-    Step(&watch, 30000, 0);
-    ev = Step(&watch, 35000, 1);
+    ev = Step(&watch, 20000, 0);
+    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "just sent");
+    ev = Step(&watch, 30000, 2);
     Expect(!ev.send && watch.phase == APP_WATCH_SENT, "cat returns");
-    Step(&watch, 35000, 0);
-    ev = Step(&watch, 54999, 0);
-    Expect(watch.phase == APP_WATCH_SENT, "still latched");
-    ev = Step(&watch, 55000, 0);
-    Expect(watch.phase == APP_WATCH_IDLE, "absent done");
+    ev = Step(&watch, 30000, 0);
+    Expect(watch.phase == APP_WATCH_SENT, "gone again");
+    ev = Step(&watch, 49999, 0);
+    Expect(watch.phase == APP_WATCH_SENT, "absent short");
+    ev = Step(&watch, 50000, 0);
+    Expect(watch.phase == APP_WATCH_IDLE, "rearm");
+    ev = Step(&watch, 50000, 2);
+    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "rearm recounts");
+    ev = Step(&watch, 53000, 2);
+    Expect(ev.keep && ev.send, "pair after rearm");
 }
 
 static void TestMissedShot(void)
@@ -121,7 +132,9 @@ static AppVerdict JudgeAt(AppWatchJudge *judge, int64_t now, int has_cat)
     AppVerdict verdict;
     memset(&fact, 0, sizeof(fact));
     fact.now_ms = now;
-    fact.has_cat = has_cat;
+    fact.has_cat = has_cat > 0;
+    fact.cats = has_cat;
+    fact.roi_cats = has_cat;
     app_watch_judge(&fact, judge, &verdict);
     return verdict;
 }
@@ -132,16 +145,17 @@ static void TestJudge(void)
     AppWatchJudge judge;
     AppWatchEvent ev;
     AppVerdict verdict;
-    int64_t now[6] = {0, 10000, 15000, 15000, 25000, 35000};
-    int cat[6] = {1, 1, 0, 1, 1, 1};
+    int64_t now[8] = {0, 0, 10000, 15000, 15000, 25000, 35000, 45000};
+    int cat[8] = {0, 1, 1, 0, 1, 1, 1, 1};
     int i;
     memset(&judge, 0, sizeof(judge));
     judge.param.present_sec = 20;
     judge.param.shot_sec = 10;
+    judge.param.pair_sec = 3;
     judge.param.absent_sec = 20;
     app_watch_reset(&watch);
     app_watch_judge_reset(&judge);
-    for (i = 0; i < 6; i++)
+    for (i = 0; i < 8; i++)
     {
         ev = Step(&watch, now[i], cat[i]);
         verdict = JudgeAt(&judge, now[i], cat[i]);
@@ -155,12 +169,119 @@ static void TestJudge(void)
     Expect(judge.watch.phase == watch.phase && judge.watch.held == watch.held, "judge state");
 }
 
+static void TestPair(void)
+{
+    AppWatch watch;
+    AppWatchJudge judge;
+    AppWatchEvent ev;
+    AppVerdict verdict;
+    app_watch_reset(&watch);
+    ev = Step(&watch, 0, 2);
+    Expect(!ev.keep && !ev.send && watch.phase == APP_WATCH_SEEN, "pair starts");
+    ev = Step(&watch, 2999, 2);
+    Expect(!ev.send, "pair short");
+    ev = Step(&watch, 3000, 2);
+    Expect(ev.keep && ev.send && ev.pair && watch.phase == APP_WATCH_SEEN, "pair ready");
+    app_watch_kept(&watch);
+    Expect(watch.phase == APP_WATCH_SENT, "pair sent");
+    ev = Step(&watch, 4000, 2);
+    Expect(!ev.send && watch.phase == APP_WATCH_SENT, "pair cooling");
+    memset(&judge, 0, sizeof(judge));
+    judge.param.present_sec = 20;
+    judge.param.shot_sec = 10;
+    judge.param.pair_sec = 3;
+    judge.param.absent_sec = 20;
+    app_watch_judge_reset(&judge);
+    verdict = JudgeAt(&judge, 0, 2);
+    Expect(!verdict.keep && !verdict.send, "judge pair waits");
+    verdict = JudgeAt(&judge, 3000, 2);
+    Expect(verdict.keep && verdict.send && verdict.pair, "judge pair ready");
+    app_watch_judge_kept(&judge);
+    Expect(judge.watch.phase == APP_WATCH_SENT, "judge pair sent");
+}
+
+static void TestPairBreak(void)
+{
+    AppWatch watch;
+    AppWatchEvent ev;
+    app_watch_reset(&watch);
+    Step(&watch, 0, 1);
+    ev = Step(&watch, 2000, 2);
+    Expect(!ev.send, "pair arm");
+    ev = Step(&watch, 4000, 1);
+    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "pair dropped");
+    ev = Step(&watch, 10000, 1);
+    Expect(ev.keep && !ev.send, "one cat still timing");
+    app_watch_kept(&watch);
+    ev = Step(&watch, 20000, 1);
+    Expect(ev.send && !ev.keep, "stay after pair break");
+}
+
+static void TestPairOrStay(void)
+{
+    AppWatch watch;
+    AppWatchEvent ev;
+    app_watch_reset(&watch);
+    Step(&watch, 0, 1);
+    ev = Step(&watch, 5000, 2);
+    Expect(!ev.send, "pair not yet");
+    ev = Step(&watch, 8000, 2);
+    Expect(ev.keep && ev.send && watch.phase == APP_WATCH_SEEN, "pair before stay");
+    app_watch_kept(&watch);
+    Expect(watch.phase == APP_WATCH_SENT, "pair seals");
+    app_watch_reset(&watch);
+    Step(&watch, 0, 1);
+    ev = Step(&watch, 10000, 1);
+    Expect(ev.keep && !ev.send, "one cat waits");
+    app_watch_kept(&watch);
+    ev = Step(&watch, 20000, 1);
+    Expect(ev.send && !ev.keep && !ev.pair && watch.phase == APP_WATCH_SENT, "stay alone");
+}
+
+static void TestSplit(void)
+{
+    AppWatch watch;
+    AppWatchEvent ev;
+    app_watch_reset(&watch);
+    ev = StepBoth(&watch, 0, 1, 0);
+    Expect(!ev.keep && !ev.send && watch.phase == APP_WATCH_IDLE, "outside one");
+    ev = StepBoth(&watch, 20000, 1, 0);
+    Expect(!ev.keep && !ev.send && watch.phase == APP_WATCH_IDLE, "outside stays idle");
+    app_watch_reset(&watch);
+    ev = StepBoth(&watch, 0, 2, 0);
+    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "outside pair");
+    ev = StepBoth(&watch, 3000, 2, 0);
+    Expect(ev.keep && ev.send && ev.pair, "outside pair ready");
+    app_watch_reset(&watch);
+    StepBoth(&watch, 0, 2, 1);
+    ev = StepBoth(&watch, 2000, 1, 1);
+    Expect(!ev.send && watch.phase == APP_WATCH_SEEN, "pair break keeps roi");
+    ev = StepBoth(&watch, 10000, 1, 1);
+    Expect(ev.keep && !ev.send && !ev.pair, "roi shot");
+    app_watch_kept(&watch);
+    ev = StepBoth(&watch, 20000, 1, 1);
+    Expect(ev.send && !ev.pair, "roi send");
+    app_watch_reset(&watch);
+    StepBoth(&watch, 0, 1, 1);
+    ev = StepBoth(&watch, 10000, 1, 1);
+    Expect(ev.keep, "hold roi");
+    app_watch_kept(&watch);
+    ev = StepBoth(&watch, 12000, 2, 0);
+    Expect(ev.drop && !ev.send && watch.phase == APP_WATCH_SEEN, "roi gone pair stays");
+    ev = StepBoth(&watch, 15000, 2, 0);
+    Expect(ev.keep && ev.send && ev.pair, "pair after roi drop");
+}
+
 int main(void)
 {
     TestCycle();
     TestBreak();
-    TestAbsentReset();
+    TestCool();
     TestMissedShot();
     TestJudge();
+    TestPair();
+    TestPairBreak();
+    TestPairOrStay();
+    TestSplit();
     return g_failed == 0 ? 0 : 1;
 }

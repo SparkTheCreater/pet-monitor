@@ -248,6 +248,7 @@ static void TestLayers(void)
     ExpectInt(app.present_sec, 20, "present");
     ExpectInt(app.shot_sec, 10, "shot");
     ExpectInt(app.absent_sec, 20, "absent");
+    ExpectInt(app.pair_sec, 3, "pair");
     ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "shot dir");
     ExpectInt(app.email_enable, 0, "mail off");
     ExpectStr(app.host, "smtp.qq.com", "host");
@@ -278,6 +279,7 @@ static void TestLayers(void)
     ExpectInt(app.present_sec, 20, "default present");
     ExpectInt(app.shot_sec, 10, "default shot");
     ExpectInt(app.absent_sec, 20, "default absent");
+    ExpectInt(app.pair_sec, 3, "default pair");
     ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "default shot dir");
     base_ini_free(empty);
 
@@ -299,10 +301,11 @@ static void TestLayers(void)
         "url = rtsp://only\n"
         "place = EAT\n"
         "score_min = 0.6\n"
+        "roi = 10,20,30,40\n"
         "[camera.box]\n"
         "url = rtsp://box\n"
-        "place = litter\n"
         "algo = detect\n"
+        "place = 阳台\n"
         "timeout_ms = 8000\n"
         "[email]\n"
         "enable = true\n"
@@ -331,6 +334,27 @@ static void TestLayers(void)
     ExpectInt(app.camera[0].place, APP_PLACE_EAT, "bowl place");
     ExpectInt(app_cfg_camera_algo(&app.camera[0]), ALGO_CAT_DET, "bowl algo");
     ExpectNear(app_cfg_camera_score(&app.camera[0]), 0.6f, "bowl score");
+    ExpectInt(app.camera[0].has_roi, 1, "bowl roi");
+    ExpectInt(app.camera[0].roi_x, 10, "bowl roi x");
+    ExpectInt(app.camera[0].roi_y, 20, "bowl roi y");
+    ExpectInt(app.camera[0].roi_w, 30, "bowl roi w");
+    ExpectInt(app.camera[0].roi_h, 40, "bowl roi h");
+    {
+        BaseRect inside;
+        BaseRect outside;
+        inside.x = 12;
+        inside.y = 30;
+        inside.w = 4;
+        inside.h = 4;
+        outside.x = 0;
+        outside.y = 0;
+        outside.w = 4;
+        outside.h = 4;
+        ExpectInt(app_cfg_box_inside(&app.camera[0], &inside), 1, "inside roi");
+        ExpectInt(app_cfg_box_inside(&app.camera[0], &outside), 0, "outside roi");
+        ExpectInt(app_cfg_box_inside(&app.camera[1], &outside), 1, "no roi");
+    }
+    ExpectInt(app.camera[1].place, APP_PLACE_BALCONY, "box place");
     ExpectInt(app_cfg_camera_algo(&app.camera[1]), ALGO_DETECT, "box algo");
     ExpectNear(app_cfg_camera_score(&app.camera[1]), 0.5f, "box score");
     ExpectInt(app.camera[0].timeout_ms, 5000, "inherited timeout");

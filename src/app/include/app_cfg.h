@@ -2,10 +2,11 @@
  * @file    app_cfg.h
  * @brief   应用配置。相机、事件和发信各自一段。
  *
- * [camera] 是各路共用的超时。每一路是 [camera.名字]，place 取 eat 或 litter。
+ * [camera] 是各路共用的超时。每一路是 [camera.名字]，place 取 eat、litter、客厅、阳台。
  * 每一路写 algo 和 score_min。algo 取 detect、track、recognize、cat。
  * 缺省 algo 是 cat，缺省 score_min 用 [algo] 的 score_min。
- * 运行时用 app_cfg_camera_algo 和 app_cfg_camera_score 取值。
+ * 每一路可以写 roi = x,y,w,h，单位是原图像素。没写就看整幅画面。
+ * 运行时用 app_cfg_camera_algo、app_cfg_camera_score，框是否落在区域内用 app_cfg_box_inside。
  * 最多 APP_CAMERA_MAX 路，按文件里的顺序。
  * [base] 只提供路径根。写错时返回 BASE_ERR，*out 不动。
  */
@@ -33,7 +34,9 @@ extern "C"
 typedef enum
 {
     APP_PLACE_EAT = 0,
-    APP_PLACE_LITTER = 1
+    APP_PLACE_LITTER = 1,
+    APP_PLACE_LIVING = 2,
+    APP_PLACE_BALCONY = 3
 }
 AppPlace;
 
@@ -48,6 +51,12 @@ typedef struct AppCamera
     int algo;
     /* 0 到 1。用 app_cfg_camera_score 读取。 */
     float score_min;
+    /* 1 表示 roi_* 有效，坐标是原图像素。 */
+    int has_roi;
+    int roi_x;
+    int roi_y;
+    int roi_w;
+    int roi_h;
 }
 AppCamera;
 
@@ -62,7 +71,9 @@ typedef struct AppConfig
     /* 猫要连续出现这么久才发信，发出去的是出现后 shot_sec 那一张。 */
     int present_sec;
     int shot_sec;
-    /* 已发信之后，猫要连续消失这么久才允许下一次。 */
+    /* 两只及以上要连续同时出现这么久才发当前这一帧。 */
+    int pair_sec;
+    /* 已发信之后，画面里没有猫连续这么久才允许下一次。 */
     int absent_sec;
     /* 判真时 JPEG 写到这里。已经拼成绝对路径。 */
     char shot_dir[APP_PATH_MAX];
@@ -83,6 +94,9 @@ BaseStatus app_cfg_from_ini(const BaseIni *ini, AppConfig *out);
 int app_cfg_camera_algo(const AppCamera *camera);
 
 float app_cfg_camera_score(const AppCamera *camera);
+
+/* 没配区域时任意框都算在内。配了区域时看框中心。 */
+int app_cfg_box_inside(const AppCamera *camera, const BaseRect *box);
 
 #ifdef __cplusplus
 }

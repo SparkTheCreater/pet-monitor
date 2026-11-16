@@ -179,6 +179,31 @@ static void Act(Lane *lane, const AppFact *fact, const AppVerdict *verdict, Base
     lane->act(&shot, verdict, lane->act_user);
 }
 
+static int InRoi(const AppCamera *camera, const AlgoDetectResult *result)
+{
+    int i;
+    int n;
+    int kind;
+    if (result == NULL)
+    {
+        return 0;
+    }
+    kind = app_cfg_camera_algo(camera);
+    if (kind != ALGO_CAT_DET && kind != ALGO_DETECT)
+    {
+        return result->count;
+    }
+    n = 0;
+    for (i = 0; i < result->count && i < ALGO_MAX; i++)
+    {
+        if (app_cfg_box_inside(camera, &result->box[i].box))
+        {
+            n += 1;
+        }
+    }
+    return n;
+}
+
 static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len, BaseDecodedFrame *frame)
 {
     AppFact fact;
@@ -196,7 +221,9 @@ static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, MediaDec *dec, uint8_
         memset(&fact, 0, sizeof(fact));
         memset(&verdict, 0, sizeof(verdict));
         fact.now_ms = NowMs();
-        fact.has_cat = result.count > 0;
+        fact.cats = result.count;
+        fact.roi_cats = InRoi(lane->camera, &result);
+        fact.has_cat = fact.roi_cats > 0;
         fact.camera = lane->camera;
         fact.result = &result;
         lane->judge(&fact, lane->judge_user, &verdict);
@@ -412,6 +439,7 @@ static void UseDefault(Lane *lane)
 {
     lane->stay.param.present_sec = lane->cfg->present_sec;
     lane->stay.param.shot_sec = lane->cfg->shot_sec;
+    lane->stay.param.pair_sec = lane->cfg->pair_sec;
     lane->stay.param.absent_sec = lane->cfg->absent_sec;
     lane->judge = app_watch_judge;
     lane->judge_user = &lane->stay;

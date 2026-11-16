@@ -22,6 +22,10 @@ typedef struct AppFact
 {
     int64_t now_ms;
     int has_cat;
+    /* 全画面的猫数。 */
+    int cats;
+    /* 框中心落在检测区域内的猫数。没配区域时与 cats 相同。 */
+    int roi_cats;
     const struct AppCamera *camera;
     const struct AlgoDetectResult *result;
 }
@@ -35,7 +39,7 @@ typedef struct AppVerdict
     int send;
     /* 留下的 JPEG 作废。 */
     int drop;
-    /* 这次由两只猫规则触发。文件名用它。 */
+    /* 这次由全画面两只猫规则触发。文件名用它。 */
     int pair;
 }
 AppVerdict;

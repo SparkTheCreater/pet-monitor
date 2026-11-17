@@ -348,3 +348,7 @@ This repository is a framework that finishes the cat-detection job. Recording an
 - Threads have no names, no heartbeat, and no watchdog, and a crash does not write a stack trace.
 - There is no separate logging thread and no statistics counter.
 - Event recording is not here. Nothing about recording is implemented.
+
+## A note
+
+This project stops here for now. I'll add more when something else comes to mind. It is a framework: the app layer puts the work together, and an algorithm goes in as a plugin. I think that leaves enough room to extend it. If you have an idea, get in touch.

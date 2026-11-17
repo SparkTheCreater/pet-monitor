@@ -17,18 +17,17 @@ Each camera is one thread, with its own model and score. Mail goes out on anothe
 
 ## Quick start
 
-The board needs MPP, librga, RKNN, FFmpeg (`libavformat`, `libavcodec`, `libavutil`), and OpenSSL. Point the three chip include directories at the local SDK headers, then build the binary:
+The board needs MPP, librga, RKNN, FFmpeg (`libavformat`, `libavcodec`, `libavutil`), and OpenSSL. `rknn_api.h` ships in `src/plt/rk3588/include` and matches the 1.5.2 runtime. Point the MPP and librga include directories at the local SDK headers, then build the binary:
 
 ```sh
 cmake -S . -B build -DPM_PLATFORM=rk3588 \
   -DPM_MPP_INCLUDE=/usr/include/rockchip \
-  -DPM_RGA_INCLUDE=/usr/include/rga \
-  -DPM_RKNN_INCLUDE=<rknn headers>
+  -DPM_RGA_INCLUDE=/usr/include/rga
 cmake --build build --target pet-monitor
 ./build/pet-monitor conf/pet-monitor.ini
 ```
 
-`make` does the same configure-and-build when `PM_MPP_INCLUDE`, `PM_RGA_INCLUDE`, and `PM_RKNN_INCLUDE` are set. The Makefile defaults the first two to `/usr/include/rockchip` and `/usr/include/rga`.
+`make` does the same configure-and-build when `PM_MPP_INCLUDE` and `PM_RGA_INCLUDE` are set. The Makefile defaults them to `/usr/include/rockchip` and `/usr/include/rga`.
 
 With no argument the program reads `conf/pet-monitor.ini`. Copy that file, put real camera URLs and the SMTP account in your own ini, and keep that file out of git. `conf/local.ini` is already ignored. The sample leaves `[email] enable` off and the account fields empty.
 

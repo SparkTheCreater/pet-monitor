@@ -17,18 +17,17 @@
 
 ## 快速开始
 
-板子上需要 MPP、librga、RKNN、FFmpeg（`libavformat`、`libavcodec`、`libavutil`）和 OpenSSL。把头文件目录指到本机 SDK，再编可执行文件：
+板子上需要 MPP、librga、RKNN、FFmpeg（`libavformat`、`libavcodec`、`libavutil`）和 OpenSSL。`rknn_api.h` 随仓库放在 `src/plt/rk3588/include`，和 1.5.2 的运行时配套。MPP 和 librga 的头文件目录指到本机的：
 
 ```sh
 cmake -S . -B build -DPM_PLATFORM=rk3588 \
   -DPM_MPP_INCLUDE=/usr/include/rockchip \
-  -DPM_RGA_INCLUDE=/usr/include/rga \
-  -DPM_RKNN_INCLUDE=<rknn 头文件目录>
+  -DPM_RGA_INCLUDE=/usr/include/rga
 cmake --build build --target pet-monitor
 ./build/pet-monitor conf/pet-monitor.ini
 ```
 
-三个头文件目录都已设置时，`make` 做同样的配置和编译。Makefile 里前两个的缺省值是 `/usr/include/rockchip` 和 `/usr/include/rga`。
+两个头文件目录都已设置时，`make` 做同样的配置和编译。Makefile 里的缺省值是 `/usr/include/rockchip` 和 `/usr/include/rga`。
 
 不带参数时读 `conf/pet-monitor.ini`。复制这份样例，把真实的相机地址和发信账号写进自己的 ini，不要提交。`conf/local.ini` 已经在忽略列表里。样例里 `[email] enable` 关闭，账号是空的。
 

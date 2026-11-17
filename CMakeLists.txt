@@ -23,9 +23,8 @@ target_include_directories(base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/base/incl
 if(PM_PLATFORM STREQUAL "rk3588")
     set(PM_MPP_INCLUDE "" CACHE PATH "MPP headers")
     set(PM_RGA_INCLUDE "" CACHE PATH "librga headers")
-    set(PM_RKNN_INCLUDE "" CACHE PATH "RKNN headers")
-    if(PM_MPP_INCLUDE STREQUAL "" OR PM_RGA_INCLUDE STREQUAL "" OR PM_RKNN_INCLUDE STREQUAL "")
-        message(FATAL_ERROR "rk3588 needs PM_MPP_INCLUDE, PM_RGA_INCLUDE and PM_RKNN_INCLUDE")
+    if(PM_MPP_INCLUDE STREQUAL "" OR PM_RGA_INCLUDE STREQUAL "")
+        message(FATAL_ERROR "rk3588 needs PM_MPP_INCLUDE and PM_RGA_INCLUDE")
     endif()
 
     add_library(plt SHARED
@@ -44,9 +43,9 @@ if(PM_PLATFORM STREQUAL "rk3588")
             ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/include
         PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/rk3588
+            ${CMAKE_CURRENT_SOURCE_DIR}/src/plt/rk3588/include
             ${PM_MPP_INCLUDE}
             ${PM_RGA_INCLUDE}
-            ${PM_RKNN_INCLUDE}
     )
 else()
     add_library(plt SHARED src/plt/stub/plt_stub.c)

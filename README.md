@@ -340,3 +340,12 @@ A failed read ends that attempt. The camera thread waits about two seconds and o
 ```sh
 ./build/algo_cat_demo path/to/cat.jpg models/Catto.rknn
 ```
+
+## Status and what comes next
+
+This repository is a framework that finishes the cat-detection job. Recording and muxing belong to a later project.
+
+- Each camera runs on one thread, and pulling, decoding, and inference happen one after another. Another task added to that thread stalls the whole camera. A larger project gives each step its own thread, and that split is part of managing performance.
+- Threads have no names, no heartbeat, and no watchdog, and a crash does not write a stack trace.
+- There is no separate logging thread and no statistics counter.
+- Event recording is not here. Nothing about recording is implemented.

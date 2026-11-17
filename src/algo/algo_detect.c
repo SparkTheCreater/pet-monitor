@@ -16,8 +16,8 @@ static const int kCocoCat = 15;
 static const int kClassCount = 80;
 static const int kPerAnchor = 5 + 80;
 static const int kAnchors = 3;
-static const float kNmsIou = 0.45f;
 static const float kScoreMin = 0.25f;
+static const float kNmsIou = 0.45f;
 
 static const int kAnchor8[6] = {10, 13, 16, 30, 33, 23};
 static const int kAnchor16[6] = {30, 61, 62, 45, 59, 119};
@@ -60,6 +60,7 @@ struct AiDetect
     const BaseImage *frame;
     MediaPicPreprocess prep;
     float score_min;
+    float nms_iou;
 };
 
 static int TypeOf(int coco)
@@ -386,9 +387,14 @@ BaseStatus ai_detect_open(const char *model_path, const AlgoOpenParam *param, Ai
         return BASE_ERR;
     }
     det->score_min = kScoreMin;
+    det->nms_iou = kNmsIou;
     if (param != NULL && param->score_min > 0.0f && param->score_min <= 1.0f)
     {
         det->score_min = param->score_min;
+    }
+    if (param != NULL && param->nms_iou > 0.0f && param->nms_iou <= 1.0f)
+    {
+        det->nms_iou = param->nms_iou;
     }
     if (media_npu_input_info(det->npu, &input) != BASE_OK || !InputSize(&input, &det->model_w, &det->model_h))
     {
@@ -530,7 +536,7 @@ BaseStatus ai_detect_postprocess(AiDetect *det, AlgoBox *boxes, int capacity, in
             {
                 continue;
             }
-            if (Iou(&det->cand[i], &det->cand[j]) > kNmsIou)
+            if (Iou(&det->cand[i], &det->cand[j]) > det->nms_iou)
             {
                 det->cand[j].score = -1.0f;
             }

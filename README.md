@@ -52,7 +52,7 @@ ctest --test-dir build --output-on-failure
 | `[base]` | `dir`, the root for relative paths. |
 | `[camera]` | Shared `timeout_ms` and `transport` (`tcp` or `udp`). |
 | `[camera.<name>]` | One camera: `url` (`rtsp://`), `place`, `algo`, `score_min`, optional `roi`. |
-| `[algo]` | Model paths, default score, NMS, queue depth, NPU device. |
+| `[algo]` | Model paths, default score, `nms_iou`, queue depth, NPU device. |
 | `[media]` | `jpeg_quality` for the saved picture, and encoder fields for a later recorder. |
 | `[event]` | Stay time, snapshot time, pair time, cooldown, and `shot_dir`. |
 | `[email]` | SMTP. `enable` must be true, and `host`, `from`, `to` must be set, before mail is sent. |

@@ -371,6 +371,7 @@ static void RunOnce(Lane *lane)
     param.dev_id = lane->core;
     param.queue_depth = 1;
     param.score_min = app_cfg_camera_score(lane->camera);
+    param.nms_iou = lane->algo->nms_iou;
     {
         int kind = app_cfg_camera_algo(lane->camera);
         const char *rel = algo_cfg_model(lane->algo, kind);

@@ -119,6 +119,7 @@ AlgoRecog;
  * dev_id 大于 0 时，内置算法用它选择 NPU 核。module_id 只保存，供插件打开时读取。
  * queue_depth 为 0 时用 ALGO_QUEUE_DEFAULT。满队列时送入返回 BASE_AGAIN。
  * score_min 为 0 时猫检测用 0.25。大于 0 时这一路用这个置信度。
+ * nms_iou 为 0 时检测和猫检测用 0.45。大于 0 时用这个重叠阈值。
  */
 typedef struct AlgoOpenParam
 {
@@ -129,6 +130,7 @@ typedef struct AlgoOpenParam
     int module_id;
     int queue_depth;
     float score_min;
+    float nms_iou;
 }
 AlgoOpenParam;
 

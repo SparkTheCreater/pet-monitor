@@ -52,7 +52,7 @@ ctest --test-dir build --output-on-failure
 | `[base]` | `dir`，相对路径的根。 |
 | `[camera]` | 各路共用的 `timeout_ms` 和 `transport`（`tcp` 或 `udp`）。 |
 | `[camera.<名字>]` | 一路相机：`url`（`rtsp://`）、`place`、`algo`、`score_min`，可选 `roi`。 |
-| `[algo]` | 模型路径、缺省分数、NMS、队列深度、NPU 设备号。 |
+| `[algo]` | 模型路径、缺省分数、`nms_iou`、队列深度、NPU 设备号。 |
 | `[media]` | 存图用的 `jpeg_quality`，以及以后录像会用到的编码项。 |
 | `[event]` | 停留、留图、两只猫、冷却，以及 `shot_dir`。 |
 | `[email]` | SMTP。`enable` 为真，并且 `host`、`from`、`to` 都有值，才会发信。 |

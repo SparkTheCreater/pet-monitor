@@ -218,9 +218,11 @@ static void TestLayers(void)
     ExpectStatus(algo_cfg_from_ini(ini, &algo), BASE_OK, "algo");
     ExpectStr(algo.detect_model, "models/yolov5s-640-640.rknn", "detect model");
     ExpectStr(algo.track_model, "models/yolov5s-640-640.rknn", "track model");
+    ExpectStr(algo.recog_model, "models/yolov5s-640-640.rknn", "recog model");
     ExpectStr(algo.cat_model, "models/Catto.rknn", "cat model");
     ExpectStr(algo_cfg_model(&algo, ALGO_CAT_DET), "models/Catto.rknn", "cat model get");
     ExpectStr(algo_cfg_model(&algo, ALGO_DETECT), "models/yolov5s-640-640.rknn", "detect model get");
+    ExpectStr(algo_cfg_model(&algo, ALGO_RECOGNIZE), "models/yolov5s-640-640.rknn", "recog model get");
     ExpectNear(algo.score_min, 0.25f, "score");
     ExpectNear(algo.nms_iou, 0.45f, "nms");
     ExpectInt(algo.open.queue_depth, 2, "queue");

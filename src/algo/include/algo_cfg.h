@@ -25,6 +25,7 @@ typedef struct AlgoConfig
     AlgoOpenParam open;
     char detect_model[ALGO_PATH_MAX];
     char track_model[ALGO_PATH_MAX];
+    char recog_model[ALGO_PATH_MAX];
     char cat_model[ALGO_PATH_MAX];
     float score_min;
     float nms_iou;
@@ -33,7 +34,7 @@ AlgoConfig;
 
 BaseStatus algo_cfg_from_ini(const BaseIni *ini, AlgoConfig *out);
 
-/* 按 AlgoKind 取模型路径。识别没有单独的模型时返回空。 */
+/* 按 AlgoKind 取模型路径。 */
 const char *algo_cfg_model(const AlgoConfig *cfg, int kind);
 
 #ifdef __cplusplus

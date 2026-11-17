@@ -24,6 +24,7 @@ static BaseStatus Read(const BaseIni *ini, AlgoConfig *cfg)
     double nms;
     if (Model(ini, "detect_model", kYolo, cfg->detect_model, sizeof(cfg->detect_model)) != BASE_OK ||
         Model(ini, "track_model", kYolo, cfg->track_model, sizeof(cfg->track_model)) != BASE_OK ||
+        Model(ini, "recog_model", kYolo, cfg->recog_model, sizeof(cfg->recog_model)) != BASE_OK ||
         Model(ini, "cat_model", kCat, cfg->cat_model, sizeof(cfg->cat_model)) != BASE_OK)
     {
         return BASE_ERR;
@@ -88,6 +89,10 @@ const char *algo_cfg_model(const AlgoConfig *cfg, int kind)
     if (kind == ALGO_TRACK)
     {
         return cfg->track_model;
+    }
+    if (kind == ALGO_RECOGNIZE)
+    {
+        return cfg->recog_model;
     }
     if (kind == ALGO_CAT_DET)
     {

@@ -327,12 +327,8 @@ BaseStatus app_cfg_from_ini(const BaseIni *ini, AppConfig *out)
     {
         return BASE_ERR;
     }
-    if (Positive(ini, "eat_sec", 3, &cfg.eat_sec) != BASE_OK ||
-        Positive(ini, "litter_sec", 5, &cfg.litter_sec) != BASE_OK ||
-        Positive(ini, "clip_sec", 10, &cfg.clip_sec) != BASE_OK ||
-        Positive(ini, "present_sec", 20, &cfg.present_sec) != BASE_OK ||
+    if (Positive(ini, "present_sec", 20, &cfg.present_sec) != BASE_OK ||
         Positive(ini, "shot_sec", 10, &cfg.shot_sec) != BASE_OK ||
-        Positive(ini, "absent_sec", 20, &cfg.absent_sec) != BASE_OK ||
         Positive(ini, "pair_sec", 3, &cfg.pair_sec) != BASE_OK ||
         Positive(ini, "cooldown_sec", 600, &cfg.cooldown_sec) != BASE_OK ||
         cfg.shot_sec >= cfg.present_sec)

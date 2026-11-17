@@ -65,9 +65,6 @@ typedef struct AppConfig
     char dir[APP_DIR_MAX];
     AppCamera camera[APP_CAMERA_MAX];
     int camera_count;
-    int eat_sec;
-    int litter_sec;
-    int clip_sec;
     /* 猫要连续出现这么久才发信，发出去的是出现后 shot_sec 那一张。 */
     int present_sec;
     int shot_sec;
@@ -75,8 +72,6 @@ typedef struct AppConfig
     int pair_sec;
     /* 发出去之后，这么久以内不再发。结束时重新计。 */
     int cooldown_sec;
-    /* 旧配置仍读入。再发间隔以 cooldown_sec 为准。 */
-    int absent_sec;
     /* 判真时 JPEG 写到这里。已经拼成绝对路径。 */
     char shot_dir[APP_PATH_MAX];
     int email_enable;

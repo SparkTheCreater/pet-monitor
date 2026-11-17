@@ -242,12 +242,8 @@ static void TestLayers(void)
     ExpectStr(app.camera[1].url, "rtsp://192.168.1.21:554/stream1", "litter url");
     ExpectInt(app.camera[1].place, APP_PLACE_LITTER, "litter place");
     ExpectInt(app.camera[1].timeout_ms, 5000, "litter timeout");
-    ExpectInt(app.eat_sec, 3, "eat");
-    ExpectInt(app.litter_sec, 5, "litter sec");
-    ExpectInt(app.clip_sec, 10, "clip");
     ExpectInt(app.present_sec, 20, "present");
     ExpectInt(app.shot_sec, 10, "shot");
-    ExpectInt(app.absent_sec, 20, "absent");
     ExpectInt(app.pair_sec, 3, "pair");
     ExpectInt(app.cooldown_sec, 600, "cooldown");
     ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "shot dir");
@@ -279,7 +275,6 @@ static void TestLayers(void)
     ExpectStr(app.dir, "/opt/pet-monitor", "default dir");
     ExpectInt(app.present_sec, 20, "default present");
     ExpectInt(app.shot_sec, 10, "default shot");
-    ExpectInt(app.absent_sec, 20, "default absent");
     ExpectInt(app.pair_sec, 3, "default pair");
     ExpectInt(app.cooldown_sec, 600, "default cooldown");
     ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "default shot dir");
@@ -389,7 +384,7 @@ static void TestLayers(void)
     ExpectUntouched(0x5a, (unsigned char *)&app, "score out");
     base_ini_free(ini);
 
-    ini = base_ini_parse("[event]\npresent_sec = 10\nshot_sec = 10\nabsent_sec = 20\n");
+    ini = base_ini_parse("[event]\npresent_sec = 10\nshot_sec = 10\n");
     memset(&app, 0x5a, sizeof(app));
     ExpectStatus(app_cfg_from_ini(ini, &app), BASE_ERR, "shot not before present");
     ExpectUntouched(0x5a, (unsigned char *)&app, "shot out");

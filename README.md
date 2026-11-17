@@ -303,7 +303,7 @@ The two timers do not clear each other.
 - Two or more cats in the whole frame, continuously, for `pair_sec` (default 3). The current frame is kept and sent. The file name contains `2cats`. Dropping to one cat, or to none, clears this timer.
 - One cat inside the region. The frame at `shot_sec` (default 10) is kept. It is sent when the stay reaches `present_sec` (default 20). The file name contains `event`. A frame with no cat in the region clears this timer and drops the kept JPEG.
 
-After either send, that camera is quiet for `cooldown_sec` (default 600). Counting starts again on the frame where the quiet period ends. `absent_sec` is still read from the file; the gap between sends is `cooldown_sec`.
+After either send, that camera is quiet for `cooldown_sec` (default 600). Counting starts again on the frame where the quiet period ends.
 
 The file name is `<camera>_event_<YYYYMMDD>_<HHMMSS>.jpg` or `<camera>_2cats_<YYYYMMDD>_<HHMMSS>.jpg`. The clock is UTC+8. The directory is `[event] shot_dir`.
 

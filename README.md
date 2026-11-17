@@ -6,6 +6,10 @@ Home cameras come in over RTSP. On an RK3588 the process pulls each stream, deco
 
 Each camera is one thread, with its own model and score. Mail goes out on another thread. `SIGINT` or `SIGTERM` stops the process.
 
+A frame from the living-room camera. The box and the score, 0.91, are drawn by the program.
+
+![A cat in the living room, boxed at 0.91](assets/demo.jpg)
+
 ## Features
 
 - One thread per camera. After a stream drops, that thread opens it again.

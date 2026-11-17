@@ -1,6 +1,6 @@
 /**
  * @file    media_cfg.h
- * @brief   从 [media] 填编码参数和 JPEG 质量。
+ * @brief   从 [media] 填编码参数、JPEG 质量，以及出图要不要画框、叠置信度。
  *
  * 缺键时用和 conf/pet-monitor.ini 相同的默认值。
  * 写错或越界返回 BASE_ERR，*out 不动。
@@ -20,6 +20,10 @@ typedef struct MediaConfig
 {
     MediaEncParam enc;
     int jpeg_quality;
+    /* 为真时出图调用画框。缺省为真。 */
+    int draw_box;
+    /* 为真时出图调用叠置信度。缺省为真。 */
+    int draw_score;
 }
 MediaConfig;
 

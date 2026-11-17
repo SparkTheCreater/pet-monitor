@@ -57,11 +57,11 @@ ctest --test-dir build --output-on-failure
 | `[camera]` | Shared `timeout_ms` and `transport` (`tcp` or `udp`). |
 | `[camera.<name>]` | One camera: `url` (`rtsp://`), `place`, `algo`, `score_min`, optional `roi`. |
 | `[algo]` | Model paths, default score, `nms_iou`, queue depth, NPU device. |
-| `[media]` | `jpeg_quality` for the saved picture, and encoder fields for a later recorder. |
+| `[media]` | `jpeg_quality`, `draw_box`, and `draw_score` for the saved picture, and encoder fields for a later recorder. |
 | `[event]` | Stay time, snapshot time, pair time, cooldown, and `shot_dir`. |
 | `[email]` | SMTP. `enable` must be true, and `host`, `from`, `to` must be set, before mail is sent. |
 
-`place` is `eat`, `litter`, `living`, `客厅`, `balcony`, or `阳台`. `algo` is `detect`, `track`, `recognize`, or `cat`. The default algorithm is `cat`. `roi` is `x,y,w,h` in source-frame pixels. Up to eight cameras, in file order.
+`draw_box` draws the boxes on the saved picture, and `draw_score` prints the score beside each box. Both default to true. `place` is `eat`, `litter`, `living`, `客厅`, `balcony`, or `阳台`. `algo` is `detect`, `track`, `recognize`, or `cat`. The default algorithm is `cat`. `roi` is `x,y,w,h` in source-frame pixels. Up to eight cameras, in file order.
 
 ## Layers
 

@@ -129,11 +129,21 @@ void app_act_run(const AppShot *shot, const AppVerdict *verdict, void *user)
         BaseImage marked;
         uint8_t *encoded;
         size_t encoded_len;
+        int marked_ok;
         encoded = NULL;
         encoded_len = 0;
         memset(&marked, 0, sizeof(marked));
         marked.fd = -1;
-        if (app_mark_cats(shot->frame, shot->fact->result, &marked) == BASE_OK &&
+        marked_ok = app_mark_copy(shot->frame, &marked) == BASE_OK;
+        if (marked_ok && shot->draw_box)
+        {
+            marked_ok = app_mark_boxes(&marked, shot->fact->result) == BASE_OK;
+        }
+        if (marked_ok && shot->draw_score)
+        {
+            marked_ok = app_mark_scores(&marked, shot->fact->result) == BASE_OK;
+        }
+        if (marked_ok &&
             media_jpeg_encode(&marked, shot->jpeg_quality, &encoded, &encoded_len) == BASE_OK)
         {
             media_jpeg_free(*jpeg);

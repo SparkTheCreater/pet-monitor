@@ -214,6 +214,8 @@ static void TestLayers(void)
     ExpectInt(media.enc.profile, 100, "profile");
     ExpectInt(media.enc.level, 40, "level");
     ExpectInt(media.jpeg_quality, 80, "jpeg");
+    ExpectInt(media.draw_box, 1, "draw box");
+    ExpectInt(media.draw_score, 1, "draw score");
 
     ExpectStatus(algo_cfg_from_ini(ini, &algo), BASE_OK, "algo");
     ExpectStr(algo.detect_model, "models/yolov5s-640-640.rknn", "detect model");
@@ -269,6 +271,8 @@ static void TestLayers(void)
     empty = base_ini_parse("");
     ExpectStatus(media_cfg_from_ini(empty, &media), BASE_OK, "media default");
     ExpectInt(media.enc.fps, 25, "default fps");
+    ExpectInt(media.draw_box, 1, "default draw box");
+    ExpectInt(media.draw_score, 1, "default draw score");
     ExpectStatus(algo_cfg_from_ini(empty, &algo), BASE_OK, "algo default");
     ExpectStr(algo.cat_model, "models/Catto.rknn", "default cat");
     ExpectInt(algo.open.queue_depth, ALGO_QUEUE_DEFAULT, "default queue");

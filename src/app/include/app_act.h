@@ -24,6 +24,10 @@ typedef struct AppShot
     uint8_t **jpeg;
     size_t *jpeg_len;
     int jpeg_quality;
+    /* 为真才调用画框。 */
+    int draw_box;
+    /* 为真才调用叠置信度。 */
+    int draw_score;
     AppJudgeKeptFn kept;
     void *kept_user;
     struct AppMail *mail;

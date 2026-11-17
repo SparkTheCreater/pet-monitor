@@ -57,11 +57,11 @@ ctest --test-dir build --output-on-failure
 | `[camera]` | 各路共用的 `timeout_ms` 和 `transport`（`tcp` 或 `udp`）。 |
 | `[camera.<名字>]` | 一路相机：`url`（`rtsp://`）、`place`、`algo`、`score_min`，可选 `roi`。 |
 | `[algo]` | 模型路径、缺省分数、`nms_iou`、队列深度、NPU 设备号。 |
-| `[media]` | 存图用的 `jpeg_quality`，以及以后录像会用到的编码项。 |
+| `[media]` | 存图用的 `jpeg_quality`、`draw_box`、`draw_score`，以及以后录像会用到的编码项。 |
 | `[event]` | 停留、留图、两只猫、冷却，以及 `shot_dir`。 |
 | `[email]` | SMTP。`enable` 为真，并且 `host`、`from`、`to` 都有值，才会发信。 |
 
-`place` 取 `eat`、`litter`、`living`、`客厅`、`balcony`、`阳台`。`algo` 取 `detect`、`track`、`recognize`、`cat`，缺省是 `cat`。`roi` 写成 `x,y,w,h`，单位是原图像素。最多八路，按文件里的顺序。
+`draw_box` 为真才在出图上画框，`draw_score` 为真才把置信度叠在框旁。没写时都为真。`place` 取 `eat`、`litter`、`living`、`客厅`、`balcony`、`阳台`。`algo` 取 `detect`、`track`、`recognize`、`cat`，缺省是 `cat`。`roi` 写成 `x,y,w,h`，单位是原图像素。最多八路，按文件里的顺序。
 
 ## 分层
 

@@ -122,17 +122,33 @@ static void One(BaseImage *image, const AlgoBox *box)
     Text(image, x, y, score, kText);
 }
 
-BaseStatus app_mark_cats(const BaseImage *src, const AlgoDetectResult *result, BaseImage *out)
+static int Count(const AlgoDetectResult *result)
 {
-    BaseRect rects[ALGO_MAX];
     int n;
-    int i;
+    if (result == NULL)
+    {
+        return -1;
+    }
+    n = result->count;
+    if (n > ALGO_MAX)
+    {
+        n = ALGO_MAX;
+    }
+    if (n < 0)
+    {
+        n = 0;
+    }
+    return n;
+}
+
+BaseStatus app_mark_copy(const BaseImage *src, BaseImage *out)
+{
     if (out != NULL)
     {
         memset(out, 0, sizeof(*out));
         out->fd = -1;
     }
-    if (src == NULL || result == NULL || out == NULL || !base_image_valid(src) || src->format != BASE_PIX_NV12)
+    if (src == NULL || out == NULL || !base_image_valid(src) || src->format != BASE_PIX_NV12)
     {
         return BASE_ERR;
     }
@@ -146,27 +162,56 @@ BaseStatus app_mark_cats(const BaseImage *src, const AlgoDetectResult *result, B
         media_mem_free(out);
         return BASE_ERR;
     }
-    n = result->count;
-    if (n > ALGO_MAX)
+    return BASE_OK;
+}
+
+BaseStatus app_mark_boxes(BaseImage *image, const AlgoDetectResult *result)
+{
+    BaseRect rects[ALGO_MAX];
+    int n;
+    int i;
+    n = Count(result);
+    if (image == NULL || !base_image_valid(image) || image->format != BASE_PIX_NV12 || n < 0)
     {
-        n = ALGO_MAX;
+        return BASE_ERR;
     }
-    if (n < 0)
+    if (n == 0)
     {
-        n = 0;
+        return BASE_OK;
     }
     for (i = 0; i < n; i++)
     {
         rects[i] = result->box[i].box;
     }
-    if (n > 0 && media_pic_box(out, rects, n, kBox, 4) != BASE_OK)
+    return media_pic_box(image, rects, n, kBox, 4);
+}
+
+BaseStatus app_mark_scores(BaseImage *image, const AlgoDetectResult *result)
+{
+    int n;
+    int i;
+    n = Count(result);
+    if (image == NULL || !base_image_valid(image) || image->format != BASE_PIX_NV12 || n < 0)
     {
-        media_mem_free(out);
         return BASE_ERR;
     }
     for (i = 0; i < n; i++)
     {
-        One(out, &result->box[i]);
+        One(image, &result->box[i]);
+    }
+    return BASE_OK;
+}
+
+BaseStatus app_mark_cats(const BaseImage *src, const AlgoDetectResult *result, BaseImage *out)
+{
+    if (app_mark_copy(src, out) != BASE_OK)
+    {
+        return BASE_ERR;
+    }
+    if (app_mark_boxes(out, result) != BASE_OK || app_mark_scores(out, result) != BASE_OK)
+    {
+        media_mem_free(out);
+        return BASE_ERR;
     }
     return BASE_OK;
 }

@@ -176,7 +176,9 @@ static BaseStatus Read(const BaseIni *ini, MediaConfig *cfg)
         base_ini_int(ini, "media", "qp_min", 10, &cfg->enc.qp_min) != BASE_OK ||
         base_ini_int(ini, "media", "qp_max", 51, &cfg->enc.qp_max) != BASE_OK ||
         base_ini_int(ini, "media", "level", 40, &cfg->enc.level) != BASE_OK ||
-        base_ini_int(ini, "media", "jpeg_quality", 80, &cfg->jpeg_quality) != BASE_OK)
+        base_ini_int(ini, "media", "jpeg_quality", 80, &cfg->jpeg_quality) != BASE_OK ||
+        base_ini_bool(ini, "media", "draw_box", 1, &cfg->draw_box) != BASE_OK ||
+        base_ini_bool(ini, "media", "draw_score", 1, &cfg->draw_score) != BASE_OK)
     {
         return BASE_ERR;
     }

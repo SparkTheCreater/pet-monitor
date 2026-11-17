@@ -57,6 +57,8 @@ typedef struct
     int core;
     const AlgoConfig *algo;
     int jpeg_quality;
+    int draw_box;
+    int draw_score;
     AppMail *mail;
     AppWatchJudge stay;
     AppJudgeFn judge;
@@ -172,6 +174,8 @@ static void Act(Lane *lane, const AppFact *fact, const AppVerdict *verdict, Base
     shot.jpeg = jpeg;
     shot.jpeg_len = jpeg_len;
     shot.jpeg_quality = lane->jpeg_quality;
+    shot.draw_box = lane->draw_box;
+    shot.draw_score = lane->draw_score;
     shot.kept = lane->kept;
     shot.kept_user = lane->kept_user;
     shot.mail = lane->mail;
@@ -586,6 +590,8 @@ BaseStatus app_run(const char *ini_path)
         lane[i].core = CoreOf(i);
         lane[i].algo = &algo;
         lane[i].jpeg_quality = media.jpeg_quality;
+        lane[i].draw_box = media.draw_box;
+        lane[i].draw_score = media.draw_score;
         lane[i].mail = mail;
         UseHooks(&lane[i], i);
         if (pthread_mutex_init(&lane[i].mu, NULL) != 0)

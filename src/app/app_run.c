@@ -208,6 +208,23 @@ static int InRoi(const AppCamera *camera, const AlgoDetectResult *result)
     return n;
 }
 
+static void LogSeen(const AppFact *fact, const AppVerdict *verdict)
+{
+    struct tm tm;
+    char stamp[24];
+    time_t sec;
+    sec = time(NULL) + 8 * 3600;
+    gmtime_r(&sec, &tm);
+    strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", &tm);
+    fprintf(stderr, "[app] %s %s cats=%d roi=%d keep=%d send=%d\n",
+            stamp,
+            fact->camera != NULL ? fact->camera->name : "cam",
+            fact->cats,
+            fact->roi_cats,
+            verdict->keep,
+            verdict->send);
+}
+
 static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, MediaDec *dec, uint8_t **jpeg, size_t *jpeg_len, BaseDecodedFrame *frame)
 {
     AppFact fact;
@@ -231,6 +248,10 @@ static int UseFrame(Lane *lane, Algo *ai, InferWait *wait, MediaDec *dec, uint8_
         fact.camera = lane->camera;
         fact.result = &result;
         lane->judge(&fact, lane->judge_user, &verdict);
+        if (fact.cats > 0)
+        {
+            LogSeen(&fact, &verdict);
+        }
         Act(lane, &fact, &verdict, &frame->image, jpeg, jpeg_len);
     }
     if (media_dec_release(dec, frame) != BASE_OK)

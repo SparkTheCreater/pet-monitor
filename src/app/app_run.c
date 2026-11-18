@@ -536,6 +536,18 @@ static void EnsureDir(const char *path)
     fprintf(stderr, "[app] shot dir %s\n", path);
 }
 
+static void OpenLog(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+    {
+        return;
+    }
+    if (freopen(path, "a", stderr) == NULL)
+    {
+        fprintf(stderr, "[app] log file %s\n", path);
+    }
+}
+
 static int CoreOf(int index)
 {
     if (index < 0)
@@ -584,6 +596,7 @@ BaseStatus app_run(const char *ini_path)
         base_ini_free(ini);
         return BASE_ERR;
     }
+    OpenLog(app.log_file);
     EnsureDir(app.shot_dir);
     if (media_init() != BASE_OK)
     {

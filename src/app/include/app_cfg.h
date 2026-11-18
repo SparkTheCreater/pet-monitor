@@ -8,7 +8,7 @@
  * 每一路可以写 roi = x,y,w,h，单位是原图像素。没写就看整幅画面。
  * 运行时用 app_cfg_camera_algo、app_cfg_camera_score，框是否落在区域内用 app_cfg_box_inside。
  * 最多 APP_CAMERA_MAX 路，按文件里的顺序。
- * [base] 只提供路径根。写错时返回 BASE_ERR，*out 不动。
+ * [base] 提供路径根，log_file 写了才把日志记进文件。写错时返回 BASE_ERR，*out 不动。
  */
 #ifndef APP_CFG_H
 #define APP_CFG_H
@@ -74,6 +74,8 @@ typedef struct AppConfig
     int cooldown_sec;
     /* 判真时 JPEG 写到这里。已经拼成绝对路径。 */
     char shot_dir[APP_PATH_MAX];
+    /* 非空时日志追加到这个文件。已经拼成绝对路径。 */
+    char log_file[APP_PATH_MAX];
     int email_enable;
     char host[APP_HOST_MAX];
     char user[APP_MAIL_MAX];

@@ -346,6 +346,17 @@ BaseStatus app_cfg_from_ini(const BaseIni *ini, AppConfig *out)
             return BASE_ERR;
         }
     }
+    {
+        char rel[APP_PATH_MAX];
+        if (base_ini_copy(ini, "base", "log_file", "", rel, sizeof(rel)) != BASE_OK)
+        {
+            return BASE_ERR;
+        }
+        if (rel[0] != '\0' && base_path_join(cfg.dir, rel, cfg.log_file, sizeof(cfg.log_file)) != BASE_OK)
+        {
+            return BASE_ERR;
+        }
+    }
     if (Email(ini, &cfg) != BASE_OK)
     {
         return BASE_ERR;

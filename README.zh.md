@@ -53,7 +53,7 @@ ctest --test-dir build --output-on-failure
 
 | 段 | 作用 |
 | --- | --- |
-| `[base]` | `dir`，相对路径的根。 |
+| `[base]` | `dir`，相对路径的根；`log_file`，写了才把日志追加进这个文件。 |
 | `[camera]` | 各路共用的 `timeout_ms` 和 `transport`（`tcp` 或 `udp`）。 |
 | `[camera.<名字>]` | 一路相机：`url`（`rtsp://`）、`place`、`algo`、`score_min`，可选 `roi`。 |
 | `[algo]` | 模型路径、缺省分数、`nms_iou`、队列深度、NPU 设备号。 |

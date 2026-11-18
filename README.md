@@ -53,7 +53,7 @@ ctest --test-dir build --output-on-failure
 
 | Section | What it sets |
 | --- | --- |
-| `[base]` | `dir`, the root for relative paths. |
+| `[base]` | `dir`, the root for relative paths; `log_file`, set it to append the log to a file. |
 | `[camera]` | Shared `timeout_ms` and `transport` (`tcp` or `udp`). |
 | `[camera.<name>]` | One camera: `url` (`rtsp://`), `place`, `algo`, `score_min`, optional `roi`. |
 | `[algo]` | Model paths, default score, `nms_iou`, queue depth, NPU device. |

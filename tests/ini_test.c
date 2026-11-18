@@ -251,6 +251,7 @@ static void TestLayers(void)
     ExpectInt(app.pair_sec, 3, "pair");
     ExpectInt(app.cooldown_sec, 600, "cooldown");
     ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "shot dir");
+    ExpectInt(app.log_file[0], 0, "log file off");
     ExpectInt(app.email_enable, 0, "mail off");
     ExpectStr(app.host, "smtp.qq.com", "host");
     ExpectStr(app.user, "", "user");
@@ -284,9 +285,13 @@ static void TestLayers(void)
     ExpectInt(app.pair_sec, 3, "default pair");
     ExpectInt(app.cooldown_sec, 600, "default cooldown");
     ExpectStr(app.shot_dir, "/opt/pet-monitor/shots", "default shot dir");
+    ExpectInt(app.log_file[0], 0, "default log file off");
     base_ini_free(empty);
 
     ini = base_ini_parse(
+        "[base]\n"
+        "dir = /opt/pet\n"
+        "log_file = run.log\n"
         "[media]\n"
         "fps = 10\n"
         "fps = 30\n"
@@ -332,6 +337,7 @@ static void TestLayers(void)
     ExpectInt(algo.open.queue_depth, 4, "override queue");
     ExpectNear(algo.score_min, 0.5f, "override score");
     ExpectStatus(app_cfg_from_ini(ini, &app), BASE_OK, "override app");
+    ExpectStr(app.log_file, "/opt/pet/run.log", "log file joined");
     ExpectInt(app.camera_count, 2, "two cameras");
     ExpectStr(app.camera[0].name, "bowl", "bowl");
     ExpectInt(app.camera[0].place, APP_PLACE_EAT, "bowl place");
